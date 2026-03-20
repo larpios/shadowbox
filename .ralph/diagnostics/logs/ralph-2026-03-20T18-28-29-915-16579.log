@@ -1,0 +1,5 @@
+2026-03-20T09:28:29.915628Z  WARN ralph::preflight: Core config 'ralph.yml' contains hats/events and hats source 'builtin:autoresearch' was provided; hats source takes precedence for hats/events
+2026-03-20T09:28:29.916556Z  INFO ralph: Creating scratchpad directory: /Users/ray/repos/shadowbox/.ralph/agent
+2026-03-20T09:28:29.916645Z  INFO ralph: Spawning subprocess for TUI mode child_args=["-c", "ralph.yml", "-H", "builtin:autoresearch", "run", "--rpc"]
+2026-03-20T09:28:29.916742Z  INFO ralph: TUI subprocess stderr redirected to log file log_file=/Users/ray/repos/shadowbox/.ralph/diagnostics/logs/ralph-2026-03-20T18-28-29-916-16579.log
+2026-03-20T09:28:29.916953Z  INFO ralph: TUI running in subprocess RPC mode
