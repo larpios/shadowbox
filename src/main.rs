@@ -22,6 +22,13 @@ enum Commands {
         /// Path to the file to track
         path: String,
     },
+    /// Untrack a file by removing it from .shadowbox and .gitignore
+    Untrack {
+        /// Path to the file to untrack
+        path: String,
+    },
+    /// List all tracked files
+    Status,
 }
 
 fn main() {
@@ -37,20 +44,53 @@ fn main() {
                 println!("Syncing...");
             }
         }
-        Some(Commands::Track { path }) => {
-            match track_file(path) {
-                Ok(normalized_path) => {
-                    println!("Tracked {}", normalized_path.display());
-                }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
+        Some(Commands::Track { path }) => match track_file(path) {
+            Ok(normalized_path) => {
+                println!("Tracked {}", normalized_path.display());
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+            }
+        },
+        Some(Commands::Untrack { path }) => match untrack_file(path) {
+            Ok(normalized_path) => {
+                println!("Untracked {}", normalized_path.display());
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+            }
+        },
+        Some(Commands::Status) => match status() {
+            Ok(files) => {
+                for file in files {
+                    println!("{}", file);
                 }
             }
-        }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+            }
+        },
         None => {
             println!("No command specified. Use --help for more info.");
         }
     }
+}
+
+fn status() -> std::io::Result<Vec<String>> {
+    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
+    let contents = read_to_string(shadowbox_file).unwrap_or_default();
+    let mut results = Vec::new();
+    for line in contents.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        if Path::new(line).exists() {
+            results.push(line.to_string());
+        } else {
+            results.push(format!("[MISSING] {}", line));
+        }
+    }
+    Ok(results)
 }
 
 fn track_file(path: &str) -> std::io::Result<PathBuf> {
@@ -62,15 +102,28 @@ fn track_file(path: &str) -> std::io::Result<PathBuf> {
         ));
     }
 
-    // Normalize path: relative to current dir, remove redundant components
     let normalized = normalize_path(raw_path)?;
     let path_str = normalized.to_string_lossy();
 
-    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or_else(|_| ".shadowbox".to_string());
-    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or_else(|_| ".gitignore".to_string());
+    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
+    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
 
     append_if_missing(&shadowbox_file, &path_str)?;
     append_if_missing(&gitignore_file, &path_str)?;
+
+    Ok(normalized)
+}
+
+fn untrack_file(path: &str) -> std::io::Result<PathBuf> {
+    let raw_path = Path::new(path);
+    let normalized = normalize_path(raw_path)?;
+    let path_str = normalized.to_string_lossy();
+
+    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
+    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
+
+    remove_line(&shadowbox_file, &path_str)?;
+    remove_line(&gitignore_file, &path_str)?;
 
     Ok(normalized)
 }
@@ -79,15 +132,31 @@ fn normalize_path(path: &Path) -> std::io::Result<PathBuf> {
     let mut normalized = PathBuf::new();
     for component in path.components() {
         match component {
+            Component::RootDir => {
+                normalized.push(component);
+            }
             Component::CurDir => continue,
             Component::ParentDir => {
                 if !normalized.pop() {
+                    // If we are at root or have no more components,
+                    // we can't pop anymore, so we might want to keep the ".."
+                    // for relative paths that go above the current directory
                     normalized.push(component);
                 }
             }
-            _ => normalized.push(component),
+            Component::Normal(c) => {
+                normalized.push(c);
+            }
+            Component::Prefix(p) => {
+                normalized.push(p.as_os_str());
+            }
         }
     }
+
+    if normalized.as_os_str().is_empty() {
+        normalized.push(".");
+    }
+
     Ok(normalized)
 }
 
@@ -100,9 +169,26 @@ fn append_if_missing(file_path: &str, line: &str) -> std::io::Result<()> {
             .open(file_path)?;
 
         if !contents.is_empty() && !contents.ends_with('\n') {
-            write!(file, "\n")?;
+            writeln!(file)?;
         }
         writeln!(file, "{}", line)?;
+    }
+    Ok(())
+}
+
+fn remove_line(file_path: &str, line_to_remove: &str) -> std::io::Result<()> {
+    if let Ok(contents) = read_to_string(file_path) {
+        let lines: Vec<&str> = contents.lines().filter(|l| *l != line_to_remove).collect();
+        if lines.len() < contents.lines().count() {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(file_path)?;
+
+            for line in lines {
+                writeln!(file, "{}", line)?;
+            }
+        }
     }
     Ok(())
 }
