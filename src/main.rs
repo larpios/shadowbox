@@ -41,7 +41,10 @@ fn main() {
                 println!("Success: true");
                 println!("Time: 0ms");
             } else {
-                println!("Syncing...");
+                match sync() {
+                    Ok(_) => println!("Sync complete."),
+                    Err(e) => eprintln!("Error during sync: {}", e),
+                }
             }
         }
         Some(Commands::Track { path }) => match track_file(path) {
@@ -74,6 +77,20 @@ fn main() {
             println!("No command specified. Use --help for more info.");
         }
     }
+}
+
+fn sync() -> std::io::Result<()> {
+    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
+    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
+
+    let contents = read_to_string(&shadowbox_file).unwrap_or_default();
+    for line in contents.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        append_if_missing(&gitignore_file, line)?;
+    }
+    Ok(())
 }
 
 fn status() -> std::io::Result<Vec<String>> {
