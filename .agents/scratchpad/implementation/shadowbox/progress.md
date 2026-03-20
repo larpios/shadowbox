@@ -17,3 +17,9 @@ Step 3: Automatic Integration Hooks
 ## Completed Steps
 - Step 1: Core Robustification and Edge-Case Handling
 - Step 2: Storage Layer Refinement and Status Features
+### Iteration: hooks-subcommand
+- Implemented 'hooks install' and 'hooks uninstall' subcommands in src/main.rs.
+- 'install' adds 'shadowbox sync' to post-checkout and post-merge git hooks.
+- 'uninstall' removes it.
+- Added integration tests in tests/hooks_test.rs.
+- All tests pass (14/14).
