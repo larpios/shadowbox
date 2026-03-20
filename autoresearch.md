@@ -30,6 +30,6 @@ Parse success/failure and timing from stdout.
 - Cross-platform support (Linux, macOS, Windows).
 
 ## What's Been Tried
+- **Run 2 (DISCARD, metric=1)**: Implement file ignore/shadowing logic (shadow-logic). Hypothesis: Differentiating local and shadowed files is core functional value. Result: DISCARD per rule: equal metric with added code (0.458s duration).
 - **Run 1 (DISCARD, metric=1)**: Implement basic configuration management (config-init). Hypothesis: Configuration management is required for real-world usage. Result: DISCARD because metric stayed at 1 but complexity and duration increased. Rule: Discard when metric is equal and code was added.
-- Initial project scoping and branch creation.
 - **Run 0 (KEEP, metric=1)**: Baseline: Initial project setup and core sync logic verification. Hypothesis: Base implementation is functional.
