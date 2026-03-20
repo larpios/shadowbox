@@ -31,6 +31,19 @@ enum Commands {
     },
     /// List all tracked files
     Status,
+    /// Manage Git hooks for automatic syncing
+    Hooks {
+        #[command(subcommand)]
+        command: HookCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum HookCommands {
+    /// Install Git hooks to automate syncing
+    Install,
+    /// Uninstall Git hooks
+    Uninstall,
 }
 
 fn main() {
@@ -78,6 +91,16 @@ fn main() {
             Err(e) => {
                 eprintln!("Error: {}", e);
             }
+        },
+        Some(Commands::Hooks { command }) => match command {
+            HookCommands::Install => match install_hooks() {
+                Ok(_) => println!("Hooks installed successfully."),
+                Err(e) => eprintln!("Error installing hooks: {}", e),
+            },
+            HookCommands::Uninstall => match uninstall_hooks() {
+                Ok(_) => println!("Hooks uninstalled successfully."),
+                Err(e) => eprintln!("Error uninstalling hooks: {}", e),
+            },
         },
         None => {
             println!("No command specified. Use --help for more info.");
@@ -235,6 +258,57 @@ fn remove_line(file_path: &str, line_to_remove: &str) -> std::io::Result<()> {
             for line in lines {
                 writeln!(file, "{}", line)?;
             }
+        }
+    }
+    Ok(())
+}
+
+fn install_hooks() -> std::io::Result<()> {
+    let hooks_dir = Path::new(".git/hooks");
+    if !hooks_dir.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            ".git directory not found. Are you in a git repository?",
+        ));
+    }
+
+    let hooks = ["post-checkout", "post-merge"];
+    for hook_name in &hooks {
+        let hook_path = hooks_dir.join(hook_name);
+        
+        if !hook_path.exists() {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&hook_path)?;
+            writeln!(file, "#!/bin/sh")?;
+        }
+
+        append_if_missing(hook_path.to_str().expect("Valid path"), "shadowbox sync")?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let metadata = std::fs::metadata(&hook_path)?;
+            let mut perms = metadata.permissions();
+            perms.set_mode(0o755);
+            let _ = std::fs::set_permissions(&hook_path, perms);
+        }
+    }
+    Ok(())
+}
+
+fn uninstall_hooks() -> std::io::Result<()> {
+    let hooks_dir = Path::new(".git/hooks");
+    if !hooks_dir.exists() {
+        return Ok(());
+    }
+
+    let hooks = ["post-checkout", "post-merge"];
+    for hook_name in &hooks {
+        let hook_path = hooks_dir.join(hook_name);
+        if hook_path.exists() {
+            remove_line(hook_path.to_str().expect("Valid path"), "shadowbox sync")?;
         }
     }
     Ok(())
