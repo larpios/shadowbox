@@ -12,6 +12,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Initialize Shadowbox
+    Init,
     /// Sync tracked files (AI artifacts, justfiles, etc.)
     Sync {
         #[arg(long)]
@@ -35,6 +37,10 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
+        Some(Commands::Init) => match init() {
+            Ok(_) => {}
+            Err(e) => eprintln!("Error: {}", e),
+        },
         Some(Commands::Sync { test_mode }) => {
             if *test_mode {
                 println!("Syncing in test mode...");
@@ -77,6 +83,33 @@ fn main() {
             println!("No command specified. Use --help for more info.");
         }
     }
+}
+
+fn init() -> std::io::Result<()> {
+    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
+    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
+
+    if !Path::new(&shadowbox_file).exists() {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&shadowbox_file)?;
+        println!("Initialized {}", shadowbox_file);
+    } else {
+        println!("{} already exists", shadowbox_file);
+    }
+
+    if !Path::new(&gitignore_file).exists() {
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&gitignore_file)?;
+        println!("Initialized {}", gitignore_file);
+    } else {
+        println!("{} already exists", gitignore_file);
+    }
+
+    Ok(())
 }
 
 fn sync() -> std::io::Result<()> {
@@ -155,9 +188,6 @@ fn normalize_path(path: &Path) -> std::io::Result<PathBuf> {
             Component::CurDir => continue,
             Component::ParentDir => {
                 if !normalized.pop() {
-                    // If we are at root or have no more components,
-                    // we can't pop anymore, so we might want to keep the ".."
-                    // for relative paths that go above the current directory
                     normalized.push(component);
                 }
             }
