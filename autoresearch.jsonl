@@ -1,1 +1,2 @@
 {"run":0,"commit":"","metric":1,"metrics":{"exit_code":0,"duration":0.327,"checks":"passed"},"status":"keep","description":"Baseline: Initial project setup and core sync logic verification.","timestamp":17739990573N,"segment":0}
+{"run":1,"commit":"25a51440da1baedf8a9cc99601cdfa5437ebc24f","metric":1,"metrics":{"exit_code":0,"duration":0.50,"checks":"passed"},"status":"discard","description":"Implement basic configuration management (config-init). DISCARD per rule: equal metric with added code.","timestamp":17739994123N,"segment":0}
