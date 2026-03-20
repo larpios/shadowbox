@@ -1,22 +1,19 @@
-# Progress: Shadowbox
+# Progress - Shadowbox
 
 ## Current Step
-Step 3 - Implement "Untrack" and "Status" Logic
+Step 3: Automatic Integration Hooks
 
 ## Active Wave
-(To be assigned)
+- `code-assist:shadowbox:step-03:sync-implementation`
+- `code-assist:shadowbox:step-03:init-command`
+- `code-assist:shadowbox:step-03:hooks-subcommand`
+- `code-assist:shadowbox:step-03:integration-tests`
 
 ## Verification Notes
-Step 2 completed successfully. All bugs (newline, positional args, normalization) identified in review were fixed and verified.
+- Ensure `sync` correctly updates `.gitignore` from an existing `.shadowbox`.
+- Verify git hooks are correctly installed and can be called by git.
+- Test integration with a dummy repository.
 
 ## Completed Steps
-- Step 1 - Scaffold runnable Rust CLI entry point
-- Step 2 - Implement Core "Add/Track" Logic
-
-## Verification Results
-- `cargo test --test smoke_test`: PASSED
-- `cargo test --test track_test`: PASSED
-- Manual verification:
-  - Positional argument: `shadowbox track <file>` works.
-  - Newline bug: `append_if_missing` correctly handles files without trailing newlines.
-  - Path normalization: `./path/../path/./file` correctly normalized to `path/file`.
+- Step 1: Core Robustification and Edge-Case Handling
+- Step 2: Storage Layer Refinement and Status Features
