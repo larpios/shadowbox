@@ -1,5 +1,4 @@
 use std::fs::{self, OpenOptions, read_to_string};
-use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use crate::config::{Config, data_dir};
@@ -183,10 +182,10 @@ pub fn push() -> std::io::Result<()> {
     fs::copy(&shadowbox_file, project_store_path.join(&shadowbox_file))?;
 
     // LFS Support
-    if let Ok(lfs_check) = Command::new("git").arg("lfs").arg("version").output() {
+    if let Ok(lfs_check) = Command::new("git-lfs").arg("version").output() {
         if lfs_check.status.success() {
             // Ensure LFS is initialized in the store
-            let _ = Command::new("git").args(["lfs", "install", "--local"]).current_dir(&store_dir).status();
+            let _ = Command::new("git-lfs").args(["install", "--local"]).current_dir(&store_dir).status();
             
             // Track files over 5MB with LFS
             if let Ok(content) = fs::read_to_string(&shadowbox_file) {
@@ -195,17 +194,16 @@ pub fn push() -> std::io::Result<()> {
                     let path = Path::new(line);
                     if let Ok(metadata) = fs::metadata(path) {
                         if metadata.len() > 5 * 1024 * 1024 { // 5MB threshold
-                             let _ = Command::new("git")
-                                .args(["lfs", "track", line])
+                             let lfs_path = Path::new(&repo_id).join(line);
+                             Command::new("git-lfs")
+                                .args(["track", &lfs_path.to_string_lossy()])
                                 .current_dir(&store_dir)
-                                .status();
+                                .status()?;
                         }
                     }
                 }
             }
         }
-    } else {
-        // Optional: warn user about large files without LFS
     }
 
     // Commit and push store
