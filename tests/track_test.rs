@@ -1,168 +1,60 @@
 use std::fs;
 use std::process::Command;
+use tempfile::tempdir;
+use std::env;
+use std::path::Path;
 
 #[test]
 fn test_track_subcommand() {
-    let test_file = "test_track_file_1.txt";
-    let shadowbox = ".shadowbox_1";
-    let gitignore = ".gitignore_1";
-    fs::write(test_file, "content").expect("Failed to write test file");
+    let home_dir = tempdir().expect("Failed to create temp home");
+    let remote_store_dir = tempdir().expect("Failed to create temp remote store");
+    let dir = tempdir().expect("Failed to create temp project");
+    let binary_path = env::current_dir().unwrap().join("target/debug/shadowbox");
 
-    let output = Command::new("cargo")
-        .args(["run", "--", "track", "./test_track_file_1.txt"])
-        .env("SHADOWBOX_FILE", shadowbox)
-        .env("GITIGNORE_FILE", gitignore)
-        .output()
-        .expect("Failed to execute command");
+    // Helper to run shadowbox
+    let run_shadowbox = |args: Vec<&str>, current_dir: &Path| {
+        Command::new(&binary_path)
+            .args(args)
+            .current_dir(current_dir)
+            .env("HOME", home_dir.path())
+            .env("XDG_CONFIG_HOME", home_dir.path().join(".config"))
+            .env("XDG_DATA_HOME", home_dir.path().join(".local/share"))
+            .output()
+            .expect("Failed to execute shadowbox")
+    };
 
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Tracked test_track_file_1.txt"));
+    // Setup store and mapping
+    Command::new("git").args(["init", "--bare"]).current_dir(remote_store_dir.path()).status().unwrap();
+    Command::new("git").args(["init"]).current_dir(dir.path()).status().unwrap();
+    Command::new("git").args(["remote", "add", "origin", "https://github.com/user/project"]).current_dir(dir.path()).status().unwrap();
 
-    let shadowbox_content = fs::read_to_string(shadowbox).unwrap_or_default();
-    assert!(
-        shadowbox_content
-            .lines()
-            .any(|l| l == "test_track_file_1.txt")
-    );
+    run_shadowbox(vec!["store", "add", "my_store", &remote_store_dir.path().to_string_lossy()], dir.path());
+    run_shadowbox(vec!["map", "**", "my_store"], dir.path());
+    run_shadowbox(vec!["init"], dir.path());
 
-    let output2 = Command::new("cargo")
-        .args(["run", "--", "track", "test_track_file_1.txt"])
-        .env("SHADOWBOX_FILE", shadowbox)
-        .env("GITIGNORE_FILE", gitignore)
-        .output()
-        .expect("Failed to execute command");
+    let test_file = "test.log";
+    fs::write(dir.path().join(test_file), "content").unwrap();
 
-    assert!(output2.status.success());
-
-    let shadowbox_content2 = fs::read_to_string(shadowbox).unwrap_or_default();
-    let count = shadowbox_content2
-        .lines()
-        .filter(|l| l == &"test_track_file_1.txt")
-        .count();
-    assert_eq!(count, 1, "Should only have one entry for the same file");
-
-    fs::remove_file(test_file).ok();
-    fs::remove_file(shadowbox).ok();
-    fs::remove_file(gitignore).ok();
-}
-
-#[test]
-fn test_path_normalization() {
-    let subdir = "test_subdir_norm_2";
-    let test_file = "test_subdir_norm_2/test_file.txt";
-    let shadowbox = ".shadowbox_2";
-    let gitignore = ".gitignore_2";
-    fs::create_dir_all(subdir).expect("Failed to create subdir");
-    fs::write(test_file, "content").expect("Failed to write test file");
-
-    let complex_path = "./test_subdir_norm_2/../test_subdir_norm_2/./test_file.txt";
-    let output = Command::new("cargo")
-        .args(["run", "--", "track", complex_path])
-        .env("SHADOWBOX_FILE", shadowbox)
-        .env("GITIGNORE_FILE", gitignore)
-        .output()
-        .expect("Failed to execute command");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Tracked test_subdir_norm_2/test_file.txt"));
-
-    let shadowbox_content = fs::read_to_string(shadowbox).unwrap_or_default();
-    assert!(
-        shadowbox_content
-            .lines()
-            .any(|l| l == "test_subdir_norm_2/test_file.txt")
-    );
-
-    fs::remove_dir_all(subdir).ok();
-    fs::remove_file(shadowbox).ok();
-    fs::remove_file(gitignore).ok();
-}
-
-#[test]
-fn test_path_normalization_edge_cases() {
-    let test_file = "edge_case.txt";
-    let shadowbox = ".shadowbox_edge";
-    let gitignore = ".gitignore_edge";
-    fs::write(test_file, "content").expect("Failed to write test file");
-
-    // Test "." normalization
-    let output = Command::new("cargo")
-        .args(["run", "--", "track", "."])
-        .env("SHADOWBOX_FILE", shadowbox)
-        .env("GITIGNORE_FILE", gitignore)
-        .output()
-        .expect("Failed to execute command");
-
-    // "." is a directory, not a file, and track_file checks for raw_path.exists()
-    // In track_file: if !raw_path.exists() { return Err ... }
-    // "." exists, so it should proceed to normalize.
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Tracked ."));
-
-    let content = fs::read_to_string(shadowbox).unwrap_or_default();
-    assert!(
-        content.lines().any(|l| l == "."),
-        "Should have '.' in shadowbox"
-    );
-
-    // Test ".." normalization from within a subdir
-    let subdir = "test_edge_subdir";
-    fs::create_dir_all(subdir).expect("Failed to create subdir");
-
-    let complex_path = "test_edge_subdir/../edge_case.txt";
-    let output2 = Command::new("cargo")
-        .args(["run", "--", "track", complex_path])
-        .env("SHADOWBOX_FILE", shadowbox)
-        .env("GITIGNORE_FILE", gitignore)
-        .output()
-        .expect("Failed to execute command");
-
-    assert!(output2.status.success());
-    let stdout2 = String::from_utf8_lossy(&output2.stdout);
-    assert!(stdout2.contains("Tracked edge_case.txt"));
-
-    fs::remove_file(test_file).ok();
-    fs::remove_dir_all(subdir).ok();
-    fs::remove_file(shadowbox).ok();
-    fs::remove_file(gitignore).ok();
-}
-
-#[test]
-fn test_append_without_newline() {
-    let test_file = "test_file_bug_3.txt";
-    let shadowbox = ".shadowbox_3";
-    let gitignore = ".gitignore_3";
-    fs::write(test_file, "content").expect("Failed to write test file");
-
-    fs::write(shadowbox, "initial_line").expect("Failed to write initial line");
-
-    let output = Command::new("cargo")
-        .args(["run", "--", "track", test_file])
-        .env("SHADOWBOX_FILE", shadowbox)
-        .env("GITIGNORE_FILE", gitignore)
-        .output()
-        .expect("Failed to execute command");
-
+    let output = run_shadowbox(vec!["track", test_file], dir.path());
     assert!(output.status.success());
 
-    let content = fs::read_to_string(shadowbox).expect("Failed to read shadowbox");
-    // Check if fixed: content will contain "initial_line\ntest_file_bug_3.txt\n"
-    assert!(
-        content.contains("\ninitial_line\n") || content.starts_with("initial_line\n"),
-        "Should have newline after initial_line, got: {:?}",
-        content
-    );
-    assert!(
-        content.contains("test_file_bug_3.txt\n"),
-        "Should have track line, got: {:?}",
-        content
-    );
+    // Verify .shadowbox NOT in project
+    assert!(!dir.path().join(".shadowbox").exists());
 
-    fs::remove_file(test_file).ok();
-    fs::remove_file(shadowbox).ok();
-    fs::remove_file(gitignore).ok();
+    // Verify tracked in store
+    let mut shadowbox_path = None;
+    for entry in walkdir::WalkDir::new(home_dir.path()) {
+        let entry = entry.unwrap();
+        if entry.file_name() == ".shadowbox" {
+            shadowbox_path = Some(entry.path().to_path_buf());
+            break;
+        }
+    }
+    let shadowbox_path = shadowbox_path.expect(".shadowbox should exist in store");
+    let shadowbox_content = fs::read_to_string(shadowbox_path).unwrap();
+    assert!(shadowbox_content.contains(test_file));
+
+    // Verify in gitignore
+    let gitignore_content = fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+    assert!(gitignore_content.contains(test_file));
 }

@@ -34,9 +34,8 @@ fn test_init_command() {
     println!("STDERR: {}", stderr);
 
     assert!(output.status.success());
-    assert!(stdout.contains("Initialized .shadowbox"));
     assert!(stdout.contains("Initialized .gitignore"));
 
-    assert!(dir.path().join(shadowbox_file_name).exists());
+    assert!(!dir.path().join(shadowbox_file_name).exists());
     assert!(dir.path().join(gitignore_file_name).exists());
 }

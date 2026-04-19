@@ -6,18 +6,7 @@ use crate::git::{get_repo_id, append_if_missing, remove_line};
 use crate::store::resolve_store;
 
 pub fn init() -> std::io::Result<()> {
-    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
     let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
-
-    if !Path::new(&shadowbox_file).exists() {
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(&shadowbox_file)?;
-        println!("Initialized {}", shadowbox_file);
-    } else {
-        println!("{} already exists", shadowbox_file);
-    }
 
     if !Path::new(&gitignore_file).exists() {
         OpenOptions::new()
@@ -33,31 +22,49 @@ pub fn init() -> std::io::Result<()> {
 }
 
 pub fn sync() -> std::io::Result<()> {
-    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
+    let config = Config::load()?;
+    let repo_id = get_repo_id()?;
+    let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository")
+    })?;
+    let store_dir = data_dir()?.join("stores").join(store_name);
+    let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
+
     let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
 
-    let contents = read_to_string(&shadowbox_file).unwrap_or_default();
-    for line in contents.lines() {
-        if line.is_empty() {
-            continue;
+    if shadowbox_file.exists() {
+        let contents = read_to_string(&shadowbox_file).unwrap_or_default();
+        for line in contents.lines() {
+            if line.is_empty() {
+                continue;
+            }
+            append_if_missing(&gitignore_file, line)?;
         }
-        append_if_missing(&gitignore_file, line)?;
     }
     Ok(())
 }
 
 pub fn status() -> std::io::Result<Vec<String>> {
-    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
-    let contents = read_to_string(shadowbox_file).unwrap_or_default();
+    let config = Config::load()?;
+    let repo_id = get_repo_id()?;
+    let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository")
+    })?;
+    let store_dir = data_dir()?.join("stores").join(store_name);
+    let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
+
     let mut results = Vec::new();
-    for line in contents.lines() {
-        if line.is_empty() {
-            continue;
-        }
-        if Path::new(line).exists() {
-            results.push(line.to_string());
-        } else {
-            results.push(format!("[MISSING] {}", line));
+    if shadowbox_file.exists() {
+        let contents = read_to_string(shadowbox_file).unwrap_or_default();
+        for line in contents.lines() {
+            if line.is_empty() {
+                continue;
+            }
+            if Path::new(line).exists() {
+                results.push(line.to_string());
+            } else {
+                results.push(format!("[MISSING] {}", line));
+            }
         }
     }
     Ok(results)
@@ -71,7 +78,16 @@ pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
     })?;
 
-    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
+    let config = Config::load()?;
+    let repo_id = get_repo_id()?;
+    let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository. Use 'shadowbox map' first.")
+    })?;
+    let store_dir = data_dir()?.join("stores").join(store_name);
+    let project_store_path = store_dir.join(&repo_id);
+    fs::create_dir_all(&project_store_path)?;
+    let shadowbox_file = project_store_path.join(".shadowbox");
+
     let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
 
     for entry in entries {
@@ -84,7 +100,7 @@ pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
         let normalized = normalize_path(&path)?;
         let path_str = normalized.to_string_lossy();
 
-        append_if_missing(&shadowbox_file, &path_str)?;
+        append_if_missing(shadowbox_file.to_str().unwrap(), &path_str)?;
         append_if_missing(&gitignore_file, &path_str)?;
         tracked_paths.push(normalized);
     }
@@ -104,10 +120,19 @@ pub fn untrack_file(path: &str) -> std::io::Result<PathBuf> {
     let normalized = normalize_path(raw_path)?;
     let path_str = normalized.to_string_lossy();
 
-    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
+    let config = Config::load()?;
+    let repo_id = get_repo_id()?;
+    let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository")
+    })?;
+    let store_dir = data_dir()?.join("stores").join(store_name);
+    let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
+
     let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
 
-    remove_line(&shadowbox_file, &path_str)?;
+    if shadowbox_file.exists() {
+        remove_line(shadowbox_file.to_str().unwrap(), &path_str)?;
+    }
     remove_line(&gitignore_file, &path_str)?;
 
     Ok(normalized)
@@ -134,7 +159,21 @@ pub fn pull() -> std::io::Result<()> {
         return Ok(());
     }
 
-    copy_dir_all(&project_store_path, Path::new("."))?;
+    // Copy everything except .shadowbox
+    for entry in fs::read_dir(&project_store_path)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name == ".shadowbox" {
+            continue;
+        }
+        let dest = Path::new(".").join(&name);
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dest)?;
+        } else {
+            fs::copy(entry.path(), dest)?;
+        }
+    }
     
     // Also sync to gitignore
     sync()?;
@@ -151,36 +190,40 @@ pub fn push() -> std::io::Result<()> {
 
     let store_dir = data_dir()?.join("stores").join(store_name);
     let project_store_path = store_dir.join(&repo_id);
-    
-    // Cleanup existing files in the store for this project to handle untracked files
+    let shadowbox_file = project_store_path.join(".shadowbox");
+
+    if !shadowbox_file.exists() {
+        println!("No files are being tracked for this project. Use 'shadowbox track' first.");
+        return Ok(());
+    }
+
+    let shadowbox_content = fs::read_to_string(&shadowbox_file)?;
+
+    // Cleanup existing files in the store for this project (except .shadowbox)
+    // We'll just read into memory, wipe, and restore .shadowbox
     if project_store_path.exists() {
         fs::remove_dir_all(&project_store_path)?;
     }
     fs::create_dir_all(&project_store_path)?;
+    fs::write(&shadowbox_file, &shadowbox_content)?;
 
-    // Read .shadowbox for files to track
-    let shadowbox_file = std::env::var("SHADOWBOX_FILE").unwrap_or(".shadowbox".to_string());
-    if let Ok(content) = fs::read_to_string(&shadowbox_file) {
-        for line in content.lines() {
-            if line.is_empty() { continue; }
-            let path = Path::new(line);
-            if path.exists() {
-                let dest = project_store_path.join(line);
-                if let Some(parent) = dest.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                if path.is_dir() {
-                    copy_dir_all(path, &dest)?;
-                } else {
-                    fs::copy(path, dest)?;
-                }
+    // Read tracked files from the memory-cached content
+    for line in shadowbox_content.lines() {
+        if line.is_empty() { continue; }
+        let path = Path::new(line);
+        if path.exists() {
+            let dest = project_store_path.join(line);
+            if let Some(parent) = dest.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            if path.is_dir() {
+                copy_dir_all(path, &dest)?;
+            } else {
+                fs::copy(path, dest)?;
             }
         }
     }
     
-    // Also copy .shadowbox itself
-    fs::copy(&shadowbox_file, project_store_path.join(&shadowbox_file))?;
-
     // LFS Support
     if let Ok(lfs_check) = Command::new("git-lfs").arg("version").output() {
         if lfs_check.status.success() {
@@ -188,18 +231,16 @@ pub fn push() -> std::io::Result<()> {
             let _ = Command::new("git-lfs").args(["install", "--local"]).current_dir(&store_dir).status();
             
             // Track files over 5MB with LFS
-            if let Ok(content) = fs::read_to_string(&shadowbox_file) {
-                for line in content.lines() {
-                    if line.is_empty() { continue; }
-                    let path = Path::new(line);
-                    if let Ok(metadata) = fs::metadata(path) {
-                        if metadata.len() > 5 * 1024 * 1024 { // 5MB threshold
-                             let lfs_path = Path::new(&repo_id).join(line);
-                             Command::new("git-lfs")
-                                .args(["track", &lfs_path.to_string_lossy()])
-                                .current_dir(&store_dir)
-                                .status()?;
-                        }
+            for line in shadowbox_content.lines() {
+                if line.is_empty() { continue; }
+                let path = Path::new(line);
+                if let Ok(metadata) = fs::metadata(path) {
+                    if metadata.len() > 5 * 1024 * 1024 { // 5MB threshold
+                         let lfs_path = Path::new(&repo_id).join(line);
+                         Command::new("git-lfs")
+                            .args(["track", &lfs_path.to_string_lossy()])
+                            .current_dir(&store_dir)
+                            .status()?;
                     }
                 }
             }
