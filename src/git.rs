@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -20,9 +20,12 @@ pub fn get_repo_id() -> std::io::Result<String> {
             Ok(id)
         }
         _ => {
-            // Fallback to absolute path
+            // Fallback to current directory name
             let path = std::env::current_dir()?;
-            Ok(path.to_string_lossy().to_string())
+            let name = path.file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "default".to_string());
+            Ok(name)
         }
     }
 }

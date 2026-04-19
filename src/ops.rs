@@ -3,7 +3,29 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use crate::config::{Config, data_dir};
 use crate::git::{get_repo_id, append_if_missing, remove_line};
-use crate::store::resolve_store;
+
+pub fn resolve_store<'a>(config: &'a Config, repo_id: &str) -> Option<&'a String> {
+    // 1. Simple exact match first
+    if let Some(store) = config.mappings.get(repo_id) {
+        return Some(store);
+    }
+    
+    // 2. Try glob matching
+    for (pattern, store) in &config.mappings {
+        if let Ok(matcher) = glob::Pattern::new(pattern) {
+            if matcher.matches(repo_id) {
+                return Some(store);
+            }
+        }
+    }
+    
+    // 3. Fallback: If exactly one store exists, use it as default
+    if config.stores.len() == 1 {
+        return config.stores.keys().next();
+    }
+    
+    None
+}
 
 pub fn init() -> std::io::Result<()> {
     let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());

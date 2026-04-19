@@ -9,26 +9,35 @@ pub fn add_store(name: &str, url: &str) -> std::io::Result<()> {
     if store_dir.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
-            format!("Store directory '{}' already exists", store_dir.display()),
+            format!("Store directory '{}' already exists. If this was a failed attempt, please delete it.", store_dir.display()),
         ));
     }
 
     fs::create_dir_all(&store_dir)?;
     
+    // Auto-protocol: Prepend https:// if missing, looks like a URL, and NOT a local path
+    let git_url = if !url.contains("://") && !url.contains('@') && !url.starts_with('/') {
+        format!("https://{}", url)
+    } else {
+        url.to_string()
+    };
+
     // git clone the store
     let status = Command::new("git")
-        .args(["clone", url, "."])
+        .args(["clone", &git_url, "."])
         .current_dir(&store_dir)
         .status()?;
 
     if !status.success() {
+        // CLEANUP: delete the directory if clone failed so user can retry
+        let _ = fs::remove_dir_all(&store_dir);
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
-            "Failed to clone store repository",
+            "Failed to clone store repository. Check your URL/permissions and try again.",
         ));
     }
 
-    config.stores.insert(name.to_string(), StoreConfig { url: url.to_string() });
+    config.stores.insert(name.to_string(), StoreConfig { url: git_url });
     config.save()
 }
 
@@ -50,27 +59,4 @@ pub fn add_mapping(pattern: &str, store: &str) -> std::io::Result<()> {
     }
     config.mappings.insert(pattern.to_string(), store.to_string());
     config.save()
-}
-
-pub fn resolve_store<'a>(config: &'a Config, repo_id: &str) -> Option<&'a String> {
-    // 1. Simple exact match first
-    if let Some(store) = config.mappings.get(repo_id) {
-        return Some(store);
-    }
-    
-    // 2. Try glob matching
-    for (pattern, store) in &config.mappings {
-        if let Ok(matcher) = glob::Pattern::new(pattern) {
-            if matcher.matches(repo_id) {
-                return Some(store);
-            }
-        }
-    }
-    
-    // 3. Fallback: If exactly one store exists, use it as default
-    if config.stores.len() == 1 {
-        return config.stores.keys().next();
-    }
-    
-    None
 }
