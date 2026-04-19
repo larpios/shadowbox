@@ -32,7 +32,7 @@ fn test_hooks_install_and_uninstall() {
 
         let mut content = String::new();
         fs::File::open(&hook_path).unwrap().read_to_string(&mut content).unwrap();
-        assert!(content.contains("shadowbox sync"), "{} should contain 'shadowbox sync'", hook_name);
+        assert!(content.contains("shadowbox pull"), "{} should contain 'shadowbox pull'", hook_name);
 
         #[cfg(unix)]
         {
@@ -57,7 +57,7 @@ fn test_hooks_install_and_uninstall() {
         if hook_path.exists() {
             let mut content = String::new();
             fs::File::open(&hook_path).unwrap().read_to_string(&mut content).unwrap();
-            assert!(!content.contains("shadowbox sync"), "{} should NOT contain 'shadowbox sync' after uninstall", hook_name);
+            assert!(!content.contains("shadowbox pull"), "{} should NOT contain 'shadowbox pull' after uninstall", hook_name);
         }
     }
 }
