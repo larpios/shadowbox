@@ -74,7 +74,6 @@ fn test_distributed_push_pull() {
     let test_file = "private.txt";
     fs::write(project_dir_a.path().join(test_file), "secret content").unwrap();
 
-    run_shadowbox(vec!["init"], project_dir_a.path());
     run_shadowbox(vec!["track", test_file], project_dir_a.path());
 
     let output = run_shadowbox(vec!["push"], project_dir_a.path());

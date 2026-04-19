@@ -51,7 +51,6 @@ fn test_glob_tracking() {
         project_dir.path(),
     );
     run_shadowbox(vec!["map", "**", "my_store"], project_dir.path());
-    run_shadowbox(vec!["init"], project_dir.path());
 
     // 3. Create multiple files
     let log1 = "logs/app.log";

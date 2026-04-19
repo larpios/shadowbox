@@ -28,20 +28,19 @@ pub fn resolve_store<'a>(config: &'a Config, repo_id: &str) -> Option<&'a String
     None
 }
 
-pub fn init() -> std::io::Result<()> {
-    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
-
-    if !Path::new(&gitignore_file).exists() {
-        OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(&gitignore_file)?;
-        println!("Initialized {}", gitignore_file);
-    } else {
-        println!("{} already exists", gitignore_file);
+pub fn link(store_name: &str) -> std::io::Result<()> {
+    let mut config = Config::load()?;
+    let repo_id = get_repo_id()?;
+    
+    if !config.stores.contains_key(store_name) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Store '{}' not found. Use 'shadowbox store add' first.", store_name),
+        ));
     }
 
-    Ok(())
+    config.mappings.insert(repo_id, store_name.to_string());
+    config.save()
 }
 
 pub fn sync() -> std::io::Result<()> {

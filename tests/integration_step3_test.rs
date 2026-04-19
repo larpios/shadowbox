@@ -56,12 +56,6 @@ fn test_integration_step3() {
     );
     run_shadowbox(vec!["map", "**", "my_store"], repo_root);
 
-    // 1. Initialize shadowbox
-    let output = run_shadowbox(vec!["init"], repo_root);
-    assert!(output.status.success());
-    assert!(!repo_root.join(".shadowbox").exists());
-    assert!(repo_root.join(".gitignore").exists());
-
     // 2. Install hooks
     let output = run_shadowbox(vec!["hooks", "install"], repo_root);
     assert!(output.status.success());

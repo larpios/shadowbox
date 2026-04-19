@@ -58,7 +58,6 @@ fn test_directory_tracking_recursive() {
         ],
         project_a_dir.path(),
     );
-    run_shadowbox(vec!["init"], project_a_dir.path());
 
     // Create a directory with multiple files
     let secret_dir = "secrets/configs";

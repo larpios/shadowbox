@@ -100,13 +100,6 @@ exit 0
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let out = run_shadowbox(vec!["init"], project_dir.path());
-    assert!(
-        out.status.success(),
-        "init failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-
     // 4. Create a large file (6MB) and a small file (100KB)
     let large_file = "model.bin";
     let small_file = "config.json";

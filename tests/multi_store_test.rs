@@ -73,7 +73,6 @@ fn test_multi_store_ambiguity() {
         .current_dir(project_dir.path())
         .status()
         .unwrap();
-    run_shadowbox(vec!["init"], project_dir.path());
 
     // Try to track without mapping - SHOULD FAIL
     fs::write(project_dir.path().join("secret.txt"), "data").unwrap();
@@ -156,7 +155,6 @@ fn test_cross_project_isolation_in_same_store() {
         .status()
         .unwrap();
     fs::write(project_1_dir.path().join("p1.txt"), "p1-content").unwrap();
-    run_shadowbox(vec!["init"], project_1_dir.path());
     run_shadowbox(vec!["track", "p1.txt"], project_1_dir.path());
     run_shadowbox(vec!["push"], project_1_dir.path());
 
@@ -177,7 +175,6 @@ fn test_cross_project_isolation_in_same_store() {
         .status()
         .unwrap();
     fs::write(project_2_dir.path().join("p2.txt"), "p2-content").unwrap();
-    run_shadowbox(vec!["init"], project_2_dir.path());
     run_shadowbox(vec!["track", "p2.txt"], project_2_dir.path());
     run_shadowbox(vec!["push"], project_2_dir.path());
 

@@ -50,7 +50,6 @@ fn test_track_subcommand() {
         dir.path(),
     );
     run_shadowbox(vec!["map", "**", "my_store"], dir.path());
-    run_shadowbox(vec!["init"], dir.path());
 
     let test_file = "test.log";
     fs::write(dir.path().join(test_file), "content").unwrap();

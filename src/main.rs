@@ -14,8 +14,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize Shadowbox
-    Init,
+    /// Link the current repository to a specific store
+    Link {
+        /// Name of the store to link to
+        store: String,
+    },
     /// Sync tracked files from the mapped store (Pull and Update .gitignore)
     Sync,
     /// Pull changes from the private remote store
@@ -78,8 +81,8 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Commands::Init) => match ops::init() {
-            Ok(_) => {}
+        Some(Commands::Link { store }) => match ops::link(store) {
+            Ok(_) => println!("Current project linked to store '{}'.", store),
             Err(e) => {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);

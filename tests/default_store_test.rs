@@ -88,13 +88,6 @@ fn test_default_store_fallback() {
         "config.toml should contain the store name"
     );
 
-    let out = run_shadowbox(vec!["init"], project_dir.path());
-    assert!(
-        out.status.success(),
-        "init failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-
     // 3. Try to track a file - should succeed because of the fallback
     fs::write(project_dir.path().join(".env"), "SECRET=true").unwrap();
     let out = run_shadowbox(vec!["track", ".env"], project_dir.path());
