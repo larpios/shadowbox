@@ -182,6 +182,32 @@ pub fn push() -> std::io::Result<()> {
     // Also copy .shadowbox itself
     fs::copy(&shadowbox_file, project_store_path.join(&shadowbox_file))?;
 
+    // LFS Support
+    if let Ok(lfs_check) = Command::new("git").arg("lfs").arg("version").output() {
+        if lfs_check.status.success() {
+            // Ensure LFS is initialized in the store
+            let _ = Command::new("git").args(["lfs", "install", "--local"]).current_dir(&store_dir).status();
+            
+            // Track files over 5MB with LFS
+            if let Ok(content) = fs::read_to_string(&shadowbox_file) {
+                for line in content.lines() {
+                    if line.is_empty() { continue; }
+                    let path = Path::new(line);
+                    if let Ok(metadata) = fs::metadata(path) {
+                        if metadata.len() > 5 * 1024 * 1024 { // 5MB threshold
+                             let _ = Command::new("git")
+                                .args(["lfs", "track", line])
+                                .current_dir(&store_dir)
+                                .status();
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Optional: warn user about large files without LFS
+    }
+
     // Commit and push store
     Command::new("git")
         .args(["add", "."])
