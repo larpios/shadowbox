@@ -1,8 +1,8 @@
-use std::process::Command;
-use tempfile::tempdir;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
+use tempfile::tempdir;
 
 #[test]
 fn test_link_command() {
@@ -28,13 +28,46 @@ fn test_link_command() {
     };
 
     // 1. Setup Remotes & Projects
-    Command::new("git").args(["init", "--bare"]).current_dir(remote_store_dir.path()).status().unwrap();
-    Command::new("git").args(["init"]).current_dir(project_dir.path()).status().unwrap();
-    Command::new("git").args(["remote", "add", "origin", "https://github.com/user/link-test"]).current_dir(project_dir.path()).status().unwrap();
+    Command::new("git")
+        .args(["init", "--bare"])
+        .current_dir(remote_store_dir.path())
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["init"])
+        .current_dir(project_dir.path())
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args([
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/user/link-test",
+        ])
+        .current_dir(project_dir.path())
+        .status()
+        .unwrap();
 
     // 2. Setup TWO stores (to disable auto-fallback)
-    run_shadowbox(vec!["store", "add", "s1", &remote_store_dir.path().to_string_lossy()], project_dir.path());
-    run_shadowbox(vec!["store", "add", "s2", &remote_store_dir.path().to_string_lossy()], project_dir.path());
+    run_shadowbox(
+        vec![
+            "store",
+            "add",
+            "s1",
+            &remote_store_dir.path().to_string_lossy(),
+        ],
+        project_dir.path(),
+    );
+    run_shadowbox(
+        vec![
+            "store",
+            "add",
+            "s2",
+            &remote_store_dir.path().to_string_lossy(),
+        ],
+        project_dir.path(),
+    );
 
     // 3. Verify track fails initially (ambiguity)
     fs::write(project_dir.path().join("file.txt"), "data").unwrap();
@@ -43,11 +76,19 @@ fn test_link_command() {
 
     // 4. Use LINK to map current repo to s1
     let out = run_shadowbox(vec!["link", "s1"], project_dir.path());
-    assert!(out.status.success(), "Link failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "Link failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     // 5. Verify track now succeeds
     let out = run_shadowbox(vec!["track", "file.txt"], project_dir.path());
-    assert!(out.status.success(), "Track failed after link: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "Track failed after link: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     // 6. Verify config.toml contains the explicit mapping
     let config_path = config_home.join("shadowbox").join("config.toml");

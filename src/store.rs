@@ -2,18 +2,22 @@ use crate::config::{Config, StoreConfig, data_dir};
 use std::fs;
 use std::process::Command;
 
-pub fn add_store(name: &str, url: &str) -> std::io::Result<()> {
+pub fn add_store(name: &str, url: &str, force: bool) -> std::io::Result<()> {
     let mut config = Config::load()?;
     let store_dir = data_dir()?.join("stores").join(name);
 
     if store_dir.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            format!(
-                "Store directory '{}' already exists. If this was a failed attempt, please delete it.",
-                store_dir.display()
-            ),
-        ));
+        if force {
+            fs::remove_dir_all(&store_dir)?;
+        } else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                format!(
+                    "Store directory '{}' already exists. Use --force to overwrite it.",
+                    store_dir.display()
+                ),
+            ));
+        }
     }
 
     fs::create_dir_all(&store_dir)?;

@@ -77,11 +77,9 @@ fn test_multi_store_ambiguity() {
     // Try to track without mapping - SHOULD FAIL
     fs::write(project_dir.path().join("secret.txt"), "data").unwrap();
     let output = run_shadowbox(vec!["track", "secret.txt"], project_dir.path());
-    assert!(
-        !output.status.success(),
-        "Track should have failed because there are 2 stores and no mapping"
-    );
-    assert!(String::from_utf8_lossy(&output.stderr).contains("No store mapping found"));
+    assert!(!output.status.success(), "Track should have failed because there are 2 stores and no mapping");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Link a vault first"));
+
 
     // Map it to 'work'
     run_shadowbox(vec!["map", "*", "work"], project_dir.path());

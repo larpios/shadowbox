@@ -12,16 +12,20 @@ fn test_status_command() {
     let binary_path = env::current_dir().unwrap().join("target/debug/shadowbox");
 
     // Helper to run shadowbox
+    let config_home = home_dir.path().join(".config");
+    let data_home = home_dir.path().join(".local/share");
+
     let run_shadowbox = |args: Vec<&str>, current_dir: &Path| {
         Command::new(&binary_path)
             .args(args)
             .current_dir(current_dir)
             .env("HOME", home_dir.path())
-            .env("XDG_CONFIG_HOME", home_dir.path().join(".config"))
-            .env("XDG_DATA_HOME", home_dir.path().join(".local/share"))
+            .env("XDG_CONFIG_HOME", &config_home)
+            .env("XDG_DATA_HOME", &data_home)
             .output()
             .expect("Failed to execute shadowbox")
     };
+
 
     // Setup store and mapping
     Command::new("git")
@@ -69,16 +73,20 @@ fn test_status_missing_file() {
     let binary_path = env::current_dir().unwrap().join("target/debug/shadowbox");
 
     // Helper to run shadowbox
+    let config_home = home_dir.path().join(".config");
+    let data_home = home_dir.path().join(".local/share");
+
     let run_shadowbox = |args: Vec<&str>, current_dir: &Path| {
         Command::new(&binary_path)
             .args(args)
             .current_dir(current_dir)
             .env("HOME", home_dir.path())
-            .env("XDG_CONFIG_HOME", home_dir.path().join(".config"))
-            .env("XDG_DATA_HOME", home_dir.path().join(".local/share"))
+            .env("XDG_CONFIG_HOME", &config_home)
+            .env("XDG_DATA_HOME", &data_home)
             .output()
             .expect("Failed to execute shadowbox")
     };
+
 
     // Setup store and mapping
     Command::new("git")
@@ -116,5 +124,8 @@ fn test_status_missing_file() {
 
     let output = run_shadowbox(vec!["status"], dir.path());
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("Status STDOUT: {}", stdout);
+    println!("Status STDERR: {}", stderr);
     assert!(stdout.contains("[MISSING] missing.txt"));
 }

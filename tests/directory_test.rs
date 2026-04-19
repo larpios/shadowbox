@@ -120,7 +120,9 @@ fn test_directory_tracking_recursive() {
     );
 
     // Verify in store
-    let store_path = home_dir.path().join(".local/share/shadowbox/stores/vault/github.com/user/dir-test");
+    let store_path = home_dir
+        .path()
+        .join(".local/share/shadowbox/stores/vault/github.com/user/dir-test");
     assert!(store_path.join("secrets/configs/key.txt").exists());
     assert!(store_path.join("secrets/configs/cert.pem").exists());
 

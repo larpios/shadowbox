@@ -74,7 +74,9 @@ fn test_glob_tracking() {
     assert!(!project_dir.path().join(".shadowbox").exists());
 
     // Files should exist in the store
-    let store_path = home_dir.path().join(".local/share/shadowbox/stores/my_store/github.com/user/project");
+    let store_path = home_dir
+        .path()
+        .join(".local/share/shadowbox/stores/my_store/github.com/user/project");
     assert!(store_path.join(log1).exists());
     assert!(store_path.join(log2).exists());
     assert!(!store_path.join(other).exists());

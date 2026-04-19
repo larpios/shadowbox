@@ -26,13 +26,13 @@ enum Commands {
     /// Push local changes to the private remote store
     #[command(alias = "ps", alias = "ph")]
     Push,
-    /// Track a file in .shadowbox and .gitignore
+    /// Track a file or directory in the private vault
     #[command(alias = "tr", alias = "t")]
     Track {
         /// Path to the file to track (supports globs)
         path: String,
     },
-    /// Untrack a file by removing it from .shadowbox and .gitignore
+    /// Untrack a file or directory by removing it from the vault
     #[command(alias = "ut", alias = "u")]
     Untrack {
         /// Path to the file to untrack
@@ -61,6 +61,10 @@ enum Commands {
         /// Store name
         store: String,
     },
+    /// Show version information
+    Version,
+    /// Diagnostic information for troubleshooting
+    Debug,
 }
 
 #[derive(Subcommand)]
@@ -72,6 +76,9 @@ enum StoreCommands {
         name: String,
         /// Git URL of the private repository
         url: String,
+        /// Overwrite the store if it already exists
+        #[arg(long, short)]
+        force: bool,
     },
     /// List all configured stores
     #[command(alias = "ls", alias = "l")]
@@ -114,7 +121,7 @@ fn main() {
             }
         },
         Some(Commands::Store { command }) => match command {
-            StoreCommands::Add { name, url } => match store::add_store(name, url) {
+            StoreCommands::Add { name, url, force } => match store::add_store(name, url, *force) {
                 Ok(_) => println!("Store '{}' added.", name),
                 Err(e) => {
                     eprintln!("Error: {}", e);
@@ -153,6 +160,7 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         },
         Some(Commands::Status) => match ops::status() {
@@ -181,6 +189,16 @@ fn main() {
                     std::process::exit(1);
                 }
             },
+        },
+        Some(Commands::Version) => {
+            println!("Shadowbox v{}", env!("CARGO_PKG_VERSION"));
+        }
+        Some(Commands::Debug) => match ops::debug_info() {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         },
         None => {
             println!("No command specified. Use --help for more info.");

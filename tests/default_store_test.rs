@@ -101,5 +101,9 @@ fn test_default_store_fallback() {
 
     // 4. Verify in store
     let store_file_path = data_home.join("shadowbox/stores/only_one/github.com/user/project/.env");
-    assert!(store_file_path.exists(), "Tracked file should exist in store at {}", store_file_path.display());
+    assert!(
+        store_file_path.exists(),
+        "Tracked file should exist in store at {}",
+        store_file_path.display()
+    );
 }

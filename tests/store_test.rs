@@ -1,6 +1,5 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::tempdir;
 
@@ -49,26 +48,6 @@ fn test_store_and_mapping() {
     assert!(output.status.success());
 
     // 3. Verify config.toml
-    // Based on src/main.rs: ProjectDirs::from("com", "shadowbox", "shadowbox")
-    // On Linux/Mac it might be ~/.config/shadowbox/config.toml
-    let config_path = if cfg!(target_os = "macos") {
-        home_dir
-            .path()
-            .join("Library/Application Support/com.shadowbox.shadowbox/config.toml")
-    } else {
-        home_dir.path().join(".config/shadowbox/config.toml")
-    };
-
-    // Actually, ProjectDirs::from("com", "shadowbox", "shadowbox") might result in
-    // com.shadowbox.shadowbox on macOS or shadowbox on Linux.
-    // Let's check the code: ProjectDirs::from("com", "shadowbox", "shadowbox")
-    // According to `directories` docs:
-    // macOS: ~/Library/Application Support/com.shadowbox.shadowbox
-    // Linux: ~/.config/shadowbox
-
-    // Since I don't want to guess the exact path across OSs in tests,
-    // I'll just check if SOME config.toml exists in the home_dir subtrees.
-
     let mut found_config = false;
     for entry in walkdir::WalkDir::new(home_dir.path()) {
         let entry = entry.unwrap();
