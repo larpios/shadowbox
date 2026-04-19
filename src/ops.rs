@@ -1,6 +1,6 @@
 use crate::config::{Config, data_dir};
-use crate::git::{append_if_missing, get_repo_id, remove_line};
-use std::fs::{self, OpenOptions, read_to_string};
+use crate::git::get_repo_id;
+use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
@@ -43,32 +43,6 @@ pub fn link(store_name: &str) -> std::io::Result<()> {
     config.save()
 }
 
-pub fn sync() -> std::io::Result<()> {
-    let config = Config::load()?;
-    let repo_id = get_repo_id()?;
-    let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "No store mapping found for this repository",
-        )
-    })?;
-    let store_dir = data_dir()?.join("stores").join(store_name);
-    let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
-
-    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
-
-    if shadowbox_file.exists() {
-        let contents = read_to_string(&shadowbox_file).unwrap_or_default();
-        for line in contents.lines() {
-            if line.is_empty() {
-                continue;
-            }
-            append_if_missing(&gitignore_file, line)?;
-        }
-    }
-    Ok(())
-}
-
 pub fn status() -> std::io::Result<Vec<String>> {
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
@@ -79,23 +53,35 @@ pub fn status() -> std::io::Result<Vec<String>> {
         )
     })?;
     let store_dir = data_dir()?.join("stores").join(store_name);
-    let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
+    let project_store_path = store_dir.join(&repo_id);
 
     let mut results = Vec::new();
-    if shadowbox_file.exists() {
-        let contents = read_to_string(shadowbox_file).unwrap_or_default();
-        for line in contents.lines() {
-            if line.is_empty() {
-                continue;
-            }
-            if Path::new(line).exists() {
-                results.push(line.to_string());
+    if project_store_path.exists() {
+        collect_managed_files(&project_store_path, Path::new(""), &mut results)?;
+    }
+    Ok(results)
+}
+
+fn collect_managed_files(base: &Path, relative: &Path, results: &mut Vec<String>) -> std::io::Result<()> {
+    for entry in fs::read_dir(base.join(relative))? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name == ".git" || name == ".shadowbox" { continue; }
+        
+        let rel_path = relative.join(name);
+        let local_path = Path::new(".").join(&rel_path);
+        
+        if entry.file_type()?.is_dir() {
+            collect_managed_files(base, &rel_path, results)?;
+        } else {
+            if local_path.exists() {
+                results.push(rel_path.to_string_lossy().to_string());
             } else {
-                results.push(format!("[MISSING] {}", line));
+                results.push(format!("[MISSING] {}", rel_path.to_string_lossy()));
             }
         }
     }
-    Ok(results)
+    Ok(())
 }
 
 pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
@@ -110,15 +96,12 @@ pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
     let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "No store mapping found for this repository. Use 'shadowbox map' first.",
+            "No store mapping found for this repository. Use 'shadowbox link' or 'shadowbox map' first.",
         )
     })?;
     let store_dir = data_dir()?.join("stores").join(store_name);
     let project_store_path = store_dir.join(&repo_id);
     fs::create_dir_all(&project_store_path)?;
-    let shadowbox_file = project_store_path.join(".shadowbox");
-
-    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
 
     for entry in entries {
         let path =
@@ -129,10 +112,18 @@ pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
         }
 
         let normalized = normalize_path(&path)?;
-        let path_str = normalized.to_string_lossy();
+        let dest = project_store_path.join(&normalized);
+        
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
 
-        append_if_missing(shadowbox_file.to_str().unwrap(), &path_str)?;
-        append_if_missing(&gitignore_file, &path_str)?;
+        if path.is_dir() {
+            copy_dir_all(&path, &dest)?;
+        } else {
+            fs::copy(&path, &dest)?;
+        }
+        
         tracked_paths.push(normalized);
     }
 
@@ -149,7 +140,6 @@ pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
 pub fn untrack_file(path: &str) -> std::io::Result<PathBuf> {
     let raw_path = Path::new(path);
     let normalized = normalize_path(raw_path)?;
-    let path_str = normalized.to_string_lossy();
 
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
@@ -160,14 +150,16 @@ pub fn untrack_file(path: &str) -> std::io::Result<PathBuf> {
         )
     })?;
     let store_dir = data_dir()?.join("stores").join(store_name);
-    let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
+    let project_store_path = store_dir.join(&repo_id);
+    let target_in_store = project_store_path.join(&normalized);
 
-    let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
-
-    if shadowbox_file.exists() {
-        remove_line(shadowbox_file.to_str().unwrap(), &path_str)?;
+    if target_in_store.exists() {
+        if target_in_store.is_dir() {
+            fs::remove_dir_all(target_in_store)?;
+        } else {
+            fs::remove_file(target_in_store)?;
+        }
     }
-    remove_line(&gitignore_file, &path_str)?;
 
     Ok(normalized)
 }
@@ -196,24 +188,8 @@ pub fn pull() -> std::io::Result<()> {
         return Ok(());
     }
 
-    // Copy everything except .shadowbox
-    for entry in fs::read_dir(&project_store_path)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        if name == ".shadowbox" {
-            continue;
-        }
-        let dest = Path::new(".").join(&name);
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(&entry.path(), &dest)?;
-        } else {
-            fs::copy(entry.path(), dest)?;
-        }
-    }
-
-    // Also sync to gitignore
-    sync()?;
+    // Copy everything from store to project
+    copy_dir_all(&project_store_path, Path::new("."))?;
 
     Ok(())
 }
@@ -230,41 +206,14 @@ pub fn push() -> std::io::Result<()> {
 
     let store_dir = data_dir()?.join("stores").join(store_name);
     let project_store_path = store_dir.join(&repo_id);
-    let shadowbox_file = project_store_path.join(".shadowbox");
 
-    if !shadowbox_file.exists() {
-        println!("No files are being tracked for this project. Use 'shadowbox track' first.");
+    if !project_store_path.exists() {
+        println!("No files are being managed for this project. Use 'shadowbox track' first.");
         return Ok(());
     }
 
-    let shadowbox_content = fs::read_to_string(&shadowbox_file)?;
-
-    // Cleanup existing files in the store for this project (except .shadowbox)
-    // We'll just read into memory, wipe, and restore .shadowbox
-    if project_store_path.exists() {
-        fs::remove_dir_all(&project_store_path)?;
-    }
-    fs::create_dir_all(&project_store_path)?;
-    fs::write(&shadowbox_file, &shadowbox_content)?;
-
-    // Read tracked files from the memory-cached content
-    for line in shadowbox_content.lines() {
-        if line.is_empty() {
-            continue;
-        }
-        let path = Path::new(line);
-        if path.exists() {
-            let dest = project_store_path.join(line);
-            if let Some(parent) = dest.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            if path.is_dir() {
-                copy_dir_all(path, &dest)?;
-            } else {
-                fs::copy(path, dest)?;
-            }
-        }
-    }
+    // Update store with local changes of managed files
+    update_store_from_local(&project_store_path, Path::new(""))?;
 
     // LFS Support
     if let Ok(lfs_check) = Command::new("git-lfs").arg("version").output() {
@@ -275,23 +224,8 @@ pub fn push() -> std::io::Result<()> {
                 .current_dir(&store_dir)
                 .status();
 
-            // Track files over 5MB with LFS
-            for line in shadowbox_content.lines() {
-                if line.is_empty() {
-                    continue;
-                }
-                let path = Path::new(line);
-                if let Ok(metadata) = fs::metadata(path) {
-                    if metadata.len() > 5 * 1024 * 1024 {
-                        // 5MB threshold
-                        let lfs_path = Path::new(&repo_id).join(line);
-                        Command::new("git-lfs")
-                            .args(["track", &lfs_path.to_string_lossy()])
-                            .current_dir(&store_dir)
-                            .status()?;
-                    }
-                }
-            }
+            // Track large files in the store
+            track_large_files_in_lfs(&store_dir, &project_store_path, Path::new(""), &repo_id)?;
         }
     }
 
@@ -321,6 +255,56 @@ pub fn push() -> std::io::Result<()> {
         println!("Nothing to push for {}.", repo_id);
     }
 
+    Ok(())
+}
+
+fn update_store_from_local(project_store_path: &Path, relative: &Path) -> std::io::Result<()> {
+    let current_dir_in_store = project_store_path.join(relative);
+    for entry in fs::read_dir(current_dir_in_store)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name == ".git" || name == ".shadowbox" { continue; }
+        
+        let rel_path = relative.join(name);
+        let local_path = Path::new(".").join(&rel_path);
+        let store_path = project_store_path.join(&rel_path);
+        
+        if entry.file_type()?.is_dir() {
+            update_store_from_local(project_store_path, &rel_path)?;
+        } else {
+            if local_path.exists() {
+                fs::copy(&local_path, &store_path)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn track_large_files_in_lfs(store_dir: &Path, project_store_path: &Path, relative: &Path, repo_id: &str) -> std::io::Result<()> {
+    let current_dir_in_store = project_store_path.join(relative);
+    for entry in fs::read_dir(current_dir_in_store)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if name == ".git" || name == ".shadowbox" { continue; }
+        
+        let rel_path = relative.join(name);
+        let store_path = project_store_path.join(&rel_path);
+        
+        if entry.file_type()?.is_dir() {
+            track_large_files_in_lfs(store_dir, project_store_path, &rel_path, repo_id)?;
+        } else {
+            if let Ok(metadata) = fs::metadata(&store_path) {
+                if metadata.len() > 5 * 1024 * 1024 {
+                    // 5MB threshold
+                    let lfs_path = Path::new(repo_id).join(&rel_path);
+                    let _ = Command::new("git-lfs")
+                        .args(["track", &lfs_path.to_string_lossy()])
+                        .current_dir(store_dir)
+                        .status();
+                }
+            }
+        }
+    }
     Ok(())
 }
 
@@ -354,15 +338,19 @@ pub fn normalize_path(path: &Path) -> std::io::Result<PathBuf> {
 }
 
 pub fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        if ty.is_dir() {
-            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
-        } else {
-            fs::copy(entry.path(), dst.join(entry.file_name()))?;
+    if src.is_dir() {
+        fs::create_dir_all(dst)?;
+        for entry in fs::read_dir(src)? {
+            let entry = entry?;
+            let ty = entry.file_type()?;
+            if ty.is_dir() {
+                copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+            } else {
+                fs::copy(entry.path(), dst.join(entry.file_name()))?;
+            }
         }
+    } else {
+        fs::copy(src, dst)?;
     }
     Ok(())
 }
