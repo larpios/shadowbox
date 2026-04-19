@@ -1,8 +1,8 @@
+use std::env;
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 use tempfile::tempdir;
-use std::env;
-use std::path::Path;
 
 #[test]
 fn test_status_command() {
@@ -24,11 +24,31 @@ fn test_status_command() {
     };
 
     // Setup store and mapping
-    Command::new("git").args(["init", "--bare"]).current_dir(remote_store_dir.path()).status().unwrap();
-    Command::new("git").args(["init"]).current_dir(dir.path()).status().unwrap();
-    Command::new("git").args(["remote", "add", "origin", "https://github.com/user/project"]).current_dir(dir.path()).status().unwrap();
+    Command::new("git")
+        .args(["init", "--bare"])
+        .current_dir(remote_store_dir.path())
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["init"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["remote", "add", "origin", "https://github.com/user/project"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
 
-    run_shadowbox(vec!["store", "add", "my_store", &remote_store_dir.path().to_string_lossy()], dir.path());
+    run_shadowbox(
+        vec![
+            "store",
+            "add",
+            "my_store",
+            &remote_store_dir.path().to_string_lossy(),
+        ],
+        dir.path(),
+    );
     run_shadowbox(vec!["map", "**", "my_store"], dir.path());
 
     // Create and track files
@@ -61,11 +81,31 @@ fn test_status_missing_file() {
     };
 
     // Setup store and mapping
-    Command::new("git").args(["init", "--bare"]).current_dir(remote_store_dir.path()).status().unwrap();
-    Command::new("git").args(["init"]).current_dir(dir.path()).status().unwrap();
-    Command::new("git").args(["remote", "add", "origin", "https://github.com/user/project"]).current_dir(dir.path()).status().unwrap();
+    Command::new("git")
+        .args(["init", "--bare"])
+        .current_dir(remote_store_dir.path())
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["init"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["remote", "add", "origin", "https://github.com/user/project"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
 
-    run_shadowbox(vec!["store", "add", "my_store", &remote_store_dir.path().to_string_lossy()], dir.path());
+    run_shadowbox(
+        vec![
+            "store",
+            "add",
+            "my_store",
+            &remote_store_dir.path().to_string_lossy(),
+        ],
+        dir.path(),
+    );
     run_shadowbox(vec!["map", "**", "my_store"], dir.path());
 
     // Track then delete local file

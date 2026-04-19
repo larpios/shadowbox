@@ -1,7 +1,7 @@
 mod config;
 mod git;
-mod store;
 mod ops;
+mod store;
 
 use clap::{Parser, Subcommand};
 
@@ -80,33 +80,54 @@ fn main() {
     match &cli.command {
         Some(Commands::Init) => match ops::init() {
             Ok(_) => {}
-            Err(e) => eprintln!("Error: {}", e),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         },
         Some(Commands::Sync) => match ops::sync() {
             Ok(_) => println!("Sync complete."),
-            Err(e) => eprintln!("Error during sync: {}", e),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         },
         Some(Commands::Pull) => match ops::pull() {
             Ok(_) => println!("Pull complete."),
-            Err(e) => eprintln!("Error during pull: {}", e),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         },
         Some(Commands::Push) => match ops::push() {
             Ok(_) => println!("Push complete."),
-            Err(e) => eprintln!("Error during push: {}", e),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         },
         Some(Commands::Store { command }) => match command {
             StoreCommands::Add { name, url } => match store::add_store(name, url) {
                 Ok(_) => println!("Store '{}' added.", name),
-                Err(e) => eprintln!("Error: {}", e),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             },
             StoreCommands::List => match store::list_stores() {
                 Ok(_) => {}
-                Err(e) => eprintln!("Error: {}", e),
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                    std::process::exit(1);
+                }
             },
         },
         Some(Commands::Map { pattern, store }) => match store::add_mapping(pattern, store) {
             Ok(_) => println!("Mapped '{}' to '{}'.", pattern, store),
-            Err(e) => eprintln!("Error: {}", e),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
         },
         Some(Commands::Track { path }) => match ops::track_file(path) {
             Ok(paths) => {
@@ -116,6 +137,7 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         },
         Some(Commands::Untrack { path }) => match ops::untrack_file(path) {
@@ -134,16 +156,23 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         },
         Some(Commands::Hooks { command }) => match command {
             HookCommands::Install => match git::install_hooks() {
                 Ok(_) => println!("Hooks installed successfully."),
-                Err(e) => eprintln!("Error installing hooks: {}", e),
+                Err(e) => {
+                    eprintln!("Error installing hooks: {}", e);
+                    std::process::exit(1);
+                }
             },
             HookCommands::Uninstall => match git::uninstall_hooks() {
                 Ok(_) => println!("Hooks uninstalled successfully."),
-                Err(e) => eprintln!("Error uninstalling hooks: {}", e),
+                Err(e) => {
+                    eprintln!("Error uninstalling hooks: {}", e);
+                    std::process::exit(1);
+                }
             },
         },
         None => {

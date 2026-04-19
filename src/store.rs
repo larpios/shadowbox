@@ -1,20 +1,23 @@
+use crate::config::{Config, StoreConfig, data_dir};
 use std::fs;
 use std::process::Command;
-use crate::config::{Config, StoreConfig, data_dir};
 
 pub fn add_store(name: &str, url: &str) -> std::io::Result<()> {
     let mut config = Config::load()?;
     let store_dir = data_dir()?.join("stores").join(name);
-    
+
     if store_dir.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
-            format!("Store directory '{}' already exists. If this was a failed attempt, please delete it.", store_dir.display()),
+            format!(
+                "Store directory '{}' already exists. If this was a failed attempt, please delete it.",
+                store_dir.display()
+            ),
         ));
     }
 
     fs::create_dir_all(&store_dir)?;
-    
+
     // Auto-protocol: Prepend https:// if missing, looks like a URL, and NOT a local path
     let git_url = if !url.contains("://") && !url.contains('@') && !url.starts_with('/') {
         format!("https://{}", url)
@@ -37,7 +40,9 @@ pub fn add_store(name: &str, url: &str) -> std::io::Result<()> {
         ));
     }
 
-    config.stores.insert(name.to_string(), StoreConfig { url: git_url });
+    config
+        .stores
+        .insert(name.to_string(), StoreConfig { url: git_url });
     config.save()
 }
 
@@ -57,6 +62,8 @@ pub fn add_mapping(pattern: &str, store: &str) -> std::io::Result<()> {
             format!("Store '{}' not found", store),
         ));
     }
-    config.mappings.insert(pattern.to_string(), store.to_string());
+    config
+        .mappings
+        .insert(pattern.to_string(), store.to_string());
     config.save()
 }

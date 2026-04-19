@@ -1,15 +1,15 @@
+use crate::config::{Config, data_dir};
+use crate::git::{append_if_missing, get_repo_id, remove_line};
 use std::fs::{self, OpenOptions, read_to_string};
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
-use crate::config::{Config, data_dir};
-use crate::git::{get_repo_id, append_if_missing, remove_line};
 
 pub fn resolve_store<'a>(config: &'a Config, repo_id: &str) -> Option<&'a String> {
     // 1. Simple exact match first
     if let Some(store) = config.mappings.get(repo_id) {
         return Some(store);
     }
-    
+
     // 2. Try glob matching
     for (pattern, store) in &config.mappings {
         if let Ok(matcher) = glob::Pattern::new(pattern) {
@@ -18,12 +18,13 @@ pub fn resolve_store<'a>(config: &'a Config, repo_id: &str) -> Option<&'a String
             }
         }
     }
-    
-    // 3. Fallback: If exactly one store exists, use it as default
+
+    // 3. Fallback: ONLY if exactly one store exists total
     if config.stores.len() == 1 {
         return config.stores.keys().next();
     }
-    
+
+    // 4. Ambiguity: multiple stores but no mapping
     None
 }
 
@@ -47,7 +48,10 @@ pub fn sync() -> std::io::Result<()> {
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
     let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No store mapping found for this repository",
+        )
     })?;
     let store_dir = data_dir()?.join("stores").join(store_name);
     let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
@@ -70,7 +74,10 @@ pub fn status() -> std::io::Result<Vec<String>> {
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
     let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No store mapping found for this repository",
+        )
     })?;
     let store_dir = data_dir()?.join("stores").join(store_name);
     let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
@@ -94,16 +101,18 @@ pub fn status() -> std::io::Result<Vec<String>> {
 
 pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
     let mut tracked_paths = Vec::new();
-    
+
     // Support globs
-    let entries = glob::glob(path_pattern).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string())
-    })?;
+    let entries = glob::glob(path_pattern)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string()))?;
 
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
     let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository. Use 'shadowbox map' first.")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No store mapping found for this repository. Use 'shadowbox map' first.",
+        )
     })?;
     let store_dir = data_dir()?.join("stores").join(store_name);
     let project_store_path = store_dir.join(&repo_id);
@@ -113,11 +122,12 @@ pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
     let gitignore_file = std::env::var("GITIGNORE_FILE").unwrap_or(".gitignore".to_string());
 
     for entry in entries {
-        let path = entry.map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-        })?;
-        
-        if !path.exists() { continue; }
+        let path =
+            entry.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+        if !path.exists() {
+            continue;
+        }
 
         let normalized = normalize_path(&path)?;
         let path_str = normalized.to_string_lossy();
@@ -128,7 +138,7 @@ pub fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
     }
 
     if tracked_paths.is_empty() && !path_pattern.contains('*') {
-         return Err(std::io::Error::new(
+        return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             format!("File '{}' not found", path_pattern),
         ));
@@ -145,7 +155,10 @@ pub fn untrack_file(path: &str) -> std::io::Result<PathBuf> {
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
     let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No store mapping found for this repository",
+        )
     })?;
     let store_dir = data_dir()?.join("stores").join(store_name);
     let shadowbox_file = store_dir.join(&repo_id).join(".shadowbox");
@@ -164,11 +177,14 @@ pub fn pull() -> std::io::Result<()> {
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
     let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No store mapping found for this repository",
+        )
     })?;
 
     let store_dir = data_dir()?.join("stores").join(store_name);
-    
+
     // git pull store
     Command::new("git")
         .args(["pull"])
@@ -196,7 +212,7 @@ pub fn pull() -> std::io::Result<()> {
             fs::copy(entry.path(), dest)?;
         }
     }
-    
+
     // Also sync to gitignore
     sync()?;
 
@@ -207,7 +223,10 @@ pub fn push() -> std::io::Result<()> {
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
     let store_name = resolve_store(&config, &repo_id).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "No store mapping found for this repository")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "No store mapping found for this repository",
+        )
     })?;
 
     let store_dir = data_dir()?.join("stores").join(store_name);
@@ -231,7 +250,9 @@ pub fn push() -> std::io::Result<()> {
 
     // Read tracked files from the memory-cached content
     for line in shadowbox_content.lines() {
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
         let path = Path::new(line);
         if path.exists() {
             let dest = project_store_path.join(line);
@@ -245,21 +266,27 @@ pub fn push() -> std::io::Result<()> {
             }
         }
     }
-    
+
     // LFS Support
     if let Ok(lfs_check) = Command::new("git-lfs").arg("version").output() {
         if lfs_check.status.success() {
             // Ensure LFS is initialized in the store
-            let _ = Command::new("git-lfs").args(["install", "--local"]).current_dir(&store_dir).status();
-            
+            let _ = Command::new("git-lfs")
+                .args(["install", "--local"])
+                .current_dir(&store_dir)
+                .status();
+
             // Track files over 5MB with LFS
             for line in shadowbox_content.lines() {
-                if line.is_empty() { continue; }
+                if line.is_empty() {
+                    continue;
+                }
                 let path = Path::new(line);
                 if let Ok(metadata) = fs::metadata(path) {
-                    if metadata.len() > 5 * 1024 * 1024 { // 5MB threshold
-                         let lfs_path = Path::new(&repo_id).join(line);
-                         Command::new("git-lfs")
+                    if metadata.len() > 5 * 1024 * 1024 {
+                        // 5MB threshold
+                        let lfs_path = Path::new(&repo_id).join(line);
+                        Command::new("git-lfs")
                             .args(["track", &lfs_path.to_string_lossy()])
                             .current_dir(&store_dir)
                             .status()?;
@@ -274,7 +301,7 @@ pub fn push() -> std::io::Result<()> {
         .args(["add", "."])
         .current_dir(&store_dir)
         .status()?;
-        
+
     // Check if there are changes to commit
     let status = Command::new("git")
         .args(["diff", "--cached", "--quiet"])
@@ -286,7 +313,7 @@ pub fn push() -> std::io::Result<()> {
             .args(["commit", "-m", &format!("Update files for {}", repo_id)])
             .current_dir(&store_dir)
             .status()?;
-            
+
         Command::new("git")
             .args(["push"])
             .current_dir(&store_dir)

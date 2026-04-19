@@ -1,28 +1,30 @@
-use std::path::Path;
-use std::process::Command;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use std::path::Path;
+use std::process::Command;
 
 pub fn get_repo_id() -> std::io::Result<String> {
     // Try to get remote origin URL
     let output = Command::new("git")
         .args(["remote", "get-url", "origin"])
         .output();
-        
+
     match output {
         Ok(out) if out.status.success() => {
             let url = String::from_utf8_lossy(&out.stdout).trim().to_string();
             // Normalize URL: remove git@, https://, and .git suffix
-            let id = url.replace("https://", "")
-                        .replace("git@", "")
-                        .replace(":", "/")
-                        .replace(".git", "");
+            let id = url
+                .replace("https://", "")
+                .replace("git@", "")
+                .replace(":", "/")
+                .replace(".git", "");
             Ok(id)
         }
         _ => {
             // Fallback to current directory name
             let path = std::env::current_dir()?;
-            let name = path.file_name()
+            let name = path
+                .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "default".to_string());
             Ok(name)
@@ -42,7 +44,7 @@ pub fn install_hooks() -> std::io::Result<()> {
     let hooks = ["post-checkout", "post-merge"];
     for hook_name in &hooks {
         let hook_path = hooks_dir.join(hook_name);
-        
+
         if !hook_path.exists() {
             let mut file = OpenOptions::new()
                 .create(true)

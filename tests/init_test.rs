@@ -1,6 +1,6 @@
+use std::env;
 use std::process::Command;
 use tempfile::tempdir;
-use std::env;
 
 #[test]
 fn test_init_command() {
@@ -9,10 +9,10 @@ fn test_init_command() {
     // But main.rs prints the string it gets from the env var or default.
     let shadowbox_file_name = ".shadowbox";
     let gitignore_file_name = ".gitignore";
-    
+
     // Get the absolute path to the shadowbox binary
     let binary_path = env::current_dir().unwrap().join("target/debug/shadowbox");
-    
+
     // Ensure binary is built
     let _ = Command::new("cargo")
         .arg("build")

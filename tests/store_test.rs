@@ -1,8 +1,8 @@
-use std::process::Command;
-use tempfile::tempdir;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
+use tempfile::tempdir;
 
 #[test]
 fn test_store_and_mapping() {
@@ -33,8 +33,16 @@ fn test_store_and_mapping() {
 
     // 1. Add store
     let remote_url = remote_dir.path().to_string_lossy();
-    let output = run_shadowbox(vec!["store", "add", "my_store", &remote_url], project_dir.path());
-    assert!(output.status.success(), "stdout: {}, stderr: {}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    let output = run_shadowbox(
+        vec!["store", "add", "my_store", &remote_url],
+        project_dir.path(),
+    );
+    assert!(
+        output.status.success(),
+        "stdout: {}, stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // 2. Add mapping
     let output = run_shadowbox(vec!["map", "my_project", "my_store"], project_dir.path());
@@ -44,21 +52,23 @@ fn test_store_and_mapping() {
     // Based on src/main.rs: ProjectDirs::from("com", "shadowbox", "shadowbox")
     // On Linux/Mac it might be ~/.config/shadowbox/config.toml
     let config_path = if cfg!(target_os = "macos") {
-        home_dir.path().join("Library/Application Support/com.shadowbox.shadowbox/config.toml")
+        home_dir
+            .path()
+            .join("Library/Application Support/com.shadowbox.shadowbox/config.toml")
     } else {
         home_dir.path().join(".config/shadowbox/config.toml")
     };
-    
-    // Actually, ProjectDirs::from("com", "shadowbox", "shadowbox") might result in 
+
+    // Actually, ProjectDirs::from("com", "shadowbox", "shadowbox") might result in
     // com.shadowbox.shadowbox on macOS or shadowbox on Linux.
     // Let's check the code: ProjectDirs::from("com", "shadowbox", "shadowbox")
     // According to `directories` docs:
     // macOS: ~/Library/Application Support/com.shadowbox.shadowbox
     // Linux: ~/.config/shadowbox
-    
-    // Since I don't want to guess the exact path across OSs in tests, 
+
+    // Since I don't want to guess the exact path across OSs in tests,
     // I'll just check if SOME config.toml exists in the home_dir subtrees.
-    
+
     let mut found_config = false;
     for entry in walkdir::WalkDir::new(home_dir.path()) {
         let entry = entry.unwrap();
