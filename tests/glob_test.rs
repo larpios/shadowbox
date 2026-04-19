@@ -73,22 +73,17 @@ fn test_glob_tracking() {
     // 5. Verify results - .shadowbox should NOT exist locally
     assert!(!project_dir.path().join(".shadowbox").exists());
 
-    // .shadowbox should exist in the store
-    let mut shadowbox_path = None;
-    for entry in walkdir::WalkDir::new(home_dir.path()) {
-        let entry = entry.unwrap();
-        if entry.file_name() == ".shadowbox" {
-            shadowbox_path = Some(entry.path().to_path_buf());
-            break;
-        }
-    }
-    let shadowbox_path = shadowbox_path.expect(".shadowbox should exist in store");
-    let shadowbox_content = fs::read_to_string(shadowbox_path).unwrap();
-    assert!(shadowbox_content.contains(log1));
-    assert!(shadowbox_content.contains(log2));
-    assert!(!shadowbox_content.contains(other));
+    // Files should exist in the store
+    let store_path = home_dir.path().join(".local/share/shadowbox/stores/my_store/github.com/user/project");
+    assert!(store_path.join(log1).exists());
+    assert!(store_path.join(log2).exists());
+    assert!(!store_path.join(other).exists());
 
-    let gitignore_content = fs::read_to_string(project_dir.path().join(".gitignore")).unwrap();
-    assert!(gitignore_content.contains(log1));
-    assert!(gitignore_content.contains(log2));
+    // Verify NOT in gitignore
+    let gitignore_path = project_dir.path().join(".gitignore");
+    if gitignore_path.exists() {
+        let gitignore_content = fs::read_to_string(gitignore_path).unwrap();
+        assert!(!gitignore_content.contains(log1));
+        assert!(!gitignore_content.contains(log2));
+    }
 }

@@ -119,7 +119,15 @@ fn test_directory_tracking_recursive() {
             .exists()
     );
 
-    // Verify .gitignore contains the root of the secret dir
-    let gitignore = fs::read_to_string(project_b_dir.path().join(".gitignore")).unwrap();
-    assert!(gitignore.contains("secrets"));
+    // Verify in store
+    let store_path = home_dir.path().join(".local/share/shadowbox/stores/vault/github.com/user/dir-test");
+    assert!(store_path.join("secrets/configs/key.txt").exists());
+    assert!(store_path.join("secrets/configs/cert.pem").exists());
+
+    // Verify NOT in gitignore
+    let gitignore_path = project_b_dir.path().join(".gitignore");
+    if gitignore_path.exists() {
+        let gitignore = fs::read_to_string(gitignore_path).unwrap();
+        assert!(!gitignore.contains("secrets"));
+    }
 }

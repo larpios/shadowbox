@@ -20,9 +20,6 @@ enum Commands {
         /// Name of the store to link to
         store: String,
     },
-    /// Sync tracked files from the mapped store (Pull and Update .gitignore)
-    #[command(alias = "sy")]
-    Sync,
     /// Pull changes from the private remote store
     #[command(alias = "pl")]
     Pull,
@@ -97,13 +94,6 @@ fn main() {
     match &cli.command {
         Some(Commands::Link { store }) => match ops::link(store) {
             Ok(_) => println!("Current project linked to store '{}'.", store),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
-        Some(Commands::Sync) => match ops::sync() {
-            Ok(_) => println!("Sync complete."),
             Err(e) => {
                 eprintln!("Error: {}", e);
                 std::process::exit(1);

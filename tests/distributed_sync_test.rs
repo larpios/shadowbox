@@ -115,7 +115,10 @@ fn test_distributed_push_pull() {
         "secret content"
     );
 
-    // Verify .gitignore updated in B
-    let gitignore = fs::read_to_string(project_dir_b.path().join(".gitignore")).unwrap();
-    assert!(gitignore.contains(test_file));
+    // Verify NOT in gitignore
+    let gitignore_path = project_dir_b.path().join(".gitignore");
+    if gitignore_path.exists() {
+        let gitignore = fs::read_to_string(gitignore_path).unwrap();
+        assert!(!gitignore.contains(test_file));
+    }
 }

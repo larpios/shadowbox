@@ -61,19 +61,16 @@ fn test_track_subcommand() {
     assert!(!dir.path().join(".shadowbox").exists());
 
     // Verify tracked in store
-    let mut shadowbox_path = None;
-    for entry in walkdir::WalkDir::new(home_dir.path()) {
-        let entry = entry.unwrap();
-        if entry.file_name() == ".shadowbox" {
-            shadowbox_path = Some(entry.path().to_path_buf());
-            break;
-        }
-    }
-    let shadowbox_path = shadowbox_path.expect(".shadowbox should exist in store");
-    let shadowbox_content = fs::read_to_string(shadowbox_path).unwrap();
-    assert!(shadowbox_content.contains(test_file));
+    // Repo ID for https://github.com/user/project is github.com/user/project
+    let store_file_path = home_dir.path()
+        .join(".local/share/shadowbox/stores/my_store/github.com/user/project")
+        .join(test_file);
+    assert!(store_file_path.exists());
 
-    // Verify in gitignore
-    let gitignore_content = fs::read_to_string(dir.path().join(".gitignore")).unwrap();
-    assert!(gitignore_content.contains(test_file));
+    // Verify NOT in gitignore
+    let gitignore_path = dir.path().join(".gitignore");
+    if gitignore_path.exists() {
+        let gitignore_content = fs::read_to_string(gitignore_path).unwrap();
+        assert!(!gitignore_content.contains(test_file));
+    }
 }

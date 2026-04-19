@@ -100,19 +100,6 @@ fn test_default_store_fallback() {
     );
 
     // 4. Verify in store
-    let mut found = false;
-    println!(
-        "Searching for .shadowbox in home: {}",
-        home_dir.path().display()
-    );
-    for entry in walkdir::WalkDir::new(home_dir.path()) {
-        let entry = entry.unwrap();
-        println!("Found file: {}", entry.path().display());
-        if entry.file_name() == ".shadowbox" {
-            let content = fs::read_to_string(entry.path()).unwrap();
-            assert!(content.contains(".env"));
-            found = true;
-        }
-    }
-    assert!(found, ".shadowbox index not found in store");
+    let store_file_path = data_home.join("shadowbox/stores/only_one/github.com/user/project/.env");
+    assert!(store_file_path.exists(), "Tracked file should exist in store at {}", store_file_path.display());
 }

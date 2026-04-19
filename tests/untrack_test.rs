@@ -62,20 +62,15 @@ fn test_untrack_subcommand() {
     assert!(output.status.success());
 
     // Verify removed from store
-    let mut shadowbox_path = None;
-    for entry in walkdir::WalkDir::new(home_dir.path()) {
-        let entry = entry.unwrap();
-        if entry.file_name() == ".shadowbox" {
-            shadowbox_path = Some(entry.path().to_path_buf());
-            break;
-        }
-    }
-    if let Some(path) = shadowbox_path {
-        let content = fs::read_to_string(path).unwrap();
-        assert!(!content.contains(test_file));
-    }
+    let store_file_path = home_dir.path()
+        .join(".local/share/shadowbox/stores/my_store/github.com/user/project")
+        .join(test_file);
+    assert!(!store_file_path.exists());
 
-    // Verify removed from gitignore
-    let gitignore_content = fs::read_to_string(dir.path().join(".gitignore")).unwrap();
-    assert!(!gitignore_content.contains(test_file));
+    // Verify NOT in gitignore
+    let gitignore_path = dir.path().join(".gitignore");
+    if gitignore_path.exists() {
+        let gitignore_content = fs::read_to_string(gitignore_path).unwrap();
+        assert!(!gitignore_content.contains(test_file));
+    }
 }
