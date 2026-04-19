@@ -218,11 +218,11 @@ pub fn push() -> std::io::Result<()> {
     // LFS Support
     if let Ok(lfs_check) = Command::new("git-lfs").arg("version").output() {
         if lfs_check.status.success() {
-            // Ensure LFS is initialized in the store
+            // Ensure LFS is initialized in the store (SILENTLY)
             let _ = Command::new("git-lfs")
-                .args(["install", "--local"])
+                .args(["install", "--local", "--skip-smudge"])
                 .current_dir(&store_dir)
-                .status();
+                .output(); // Use output() to capture and ignore the noise
 
             // Track large files in the store
             track_large_files_in_lfs(&store_dir, &project_store_path, Path::new(""), &repo_id)?;
