@@ -15,39 +15,49 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Link the current repository to a specific store
+    #[command(alias = "ln")]
     Link {
         /// Name of the store to link to
         store: String,
     },
     /// Sync tracked files from the mapped store (Pull and Update .gitignore)
+    #[command(alias = "sy")]
     Sync,
     /// Pull changes from the private remote store
+    #[command(alias = "pl")]
     Pull,
     /// Push local changes to the private remote store
+    #[command(alias = "ps", alias = "ph")]
     Push,
     /// Track a file in .shadowbox and .gitignore
+    #[command(alias = "tr", alias = "t")]
     Track {
         /// Path to the file to track (supports globs)
         path: String,
     },
     /// Untrack a file by removing it from .shadowbox and .gitignore
+    #[command(alias = "ut", alias = "u")]
     Untrack {
         /// Path to the file to untrack
         path: String,
     },
     /// List all tracked files
+    #[command(alias = "st", alias = "s")]
     Status,
     /// Manage Git hooks for automatic syncing
+    #[command(alias = "h")]
     Hooks {
         #[command(subcommand)]
         command: HookCommands,
     },
     /// Manage private stores
+    #[command(alias = "sr", alias = "v")]
     Store {
         #[command(subcommand)]
         command: StoreCommands,
     },
     /// Manage project mappings
+    #[command(alias = "m")]
     Map {
         /// Pattern (e.g. github.com/user/*)
         pattern: String,
@@ -59,6 +69,7 @@ enum Commands {
 #[derive(Subcommand)]
 enum StoreCommands {
     /// Add a new private store
+    #[command(alias = "a")]
     Add {
         /// Name of the store
         name: String,
@@ -66,14 +77,17 @@ enum StoreCommands {
         url: String,
     },
     /// List all configured stores
+    #[command(alias = "ls", alias = "l")]
     List,
 }
 
 #[derive(Subcommand)]
 enum HookCommands {
     /// Install Git hooks to automate syncing
+    #[command(alias = "i", alias = "in")]
     Install,
     /// Uninstall Git hooks
+    #[command(alias = "un")]
     Uninstall,
 }
 
