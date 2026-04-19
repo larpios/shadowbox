@@ -53,18 +53,23 @@ pub fn add_mapping(pattern: &str, store: &str) -> std::io::Result<()> {
 }
 
 pub fn resolve_store<'a>(config: &'a Config, repo_id: &str) -> Option<&'a String> {
-    // Simple exact match first
+    // 1. Simple exact match first
     if let Some(store) = config.mappings.get(repo_id) {
         return Some(store);
     }
     
-    // Try glob matching
+    // 2. Try glob matching
     for (pattern, store) in &config.mappings {
         if let Ok(matcher) = glob::Pattern::new(pattern) {
             if matcher.matches(repo_id) {
                 return Some(store);
             }
         }
+    }
+    
+    // 3. Fallback: If exactly one store exists, use it as default
+    if config.stores.len() == 1 {
+        return config.stores.keys().next();
     }
     
     None
