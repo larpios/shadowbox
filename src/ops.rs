@@ -82,15 +82,15 @@ fn collect_status(
     Ok(())
 }
 
-pub fn track_files(path_patterns: &[String]) -> std::io::Result<Vec<PathBuf>> {
+pub fn track_files(path_patterns: &[String], follow_links: bool) -> std::io::Result<Vec<PathBuf>> {
     let mut tracked = Vec::new();
     for pattern in path_patterns {
-        tracked.append(&mut track_file(pattern)?);
+        tracked.append(&mut track_file(pattern, follow_links)?);
     }
     Ok(tracked)
 }
 
-fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
+fn track_file(path_pattern: &str, follow_links: bool) -> std::io::Result<Vec<PathBuf>> {
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
     let store_name = resolve_store(&config, &repo_id)
@@ -104,29 +104,39 @@ fn track_file(path_pattern: &str) -> std::io::Result<Vec<PathBuf>> {
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string()))?
     {
         let local_path = entry.map_err(|e| std::io::Error::other(e.to_string()))?;
-        if !local_path.exists() {
-            continue;
-        }
+        let _ = fs::symlink_metadata(&local_path)?;
 
-        let abs_local = fs::canonicalize(&local_path)?;
-        let rel_to_root = abs_local
+        // For destination path in vault, we always use the path as specified (relative to repo root)
+        let abs_for_rel = std::path::absolute(&local_path)?;
+
+        // For source path to copy from, we follow links only if follow_links is true
+        let src_path = if follow_links {
+            fs::canonicalize(&local_path)?
+        } else {
+            abs_for_rel.clone()
+        };
+
+        let rel_to_root = abs_for_rel
             .strip_prefix(&repo_root)
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Outside repo"))?;
 
         let dest = vault_project_path.join(rel_to_root);
         println!("  [TRACK] {} -> vault", rel_to_root.display());
-        copy_recursive(&abs_local, &dest)?;
-
+        copy_recursive(&src_path, &dest, follow_links)?;
         // LFS support
         if is_lfs_available() {
-            let metadata = fs::metadata(&abs_local)?;
+            let metadata = fs::metadata(&src_path)?;
             if metadata.is_file() && metadata.len() > 5 * 1024 * 1024 {
-                // Track in LFS in the store
-                let rel_in_store = PathBuf::from(&repo_id).join(rel_to_root);
-                let _ = Command::new("git-lfs")
-                    .current_dir(&store_dir)
-                    .args(["track", &rel_in_store.to_string_lossy()])
-                    .status();
+                // Only track in LFS if it's not a symlink OR we followed it
+                let is_symlink = fs::symlink_metadata(&src_path)?.is_symlink();
+                if !is_symlink || follow_links {
+                    // Track in LFS in the store
+                    let rel_in_store = PathBuf::from(&repo_id).join(rel_to_root);
+                    let _ = Command::new("git-lfs")
+                        .current_dir(&store_dir)
+                        .args(["track", &rel_in_store.to_string_lossy()])
+                        .status();
+                }
             }
         }
 
@@ -145,7 +155,7 @@ fn is_lfs_available() -> bool {
 
 pub fn untrack_file(path: &str) -> std::io::Result<PathBuf> {
     let repo_root = get_repo_root()?;
-    let abs_path = fs::canonicalize(Path::new(path))?;
+    let abs_path = std::path::absolute(Path::new(path))?;
     let rel_to_root = abs_path
         .strip_prefix(&repo_root)
         .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Outside repo"))?;
@@ -193,15 +203,17 @@ pub fn push() -> std::io::Result<()> {
         let local_path = repo_root.join(&name);
         let vault_path = vault_project_path.join(&name);
 
-        if local_path.exists() {
+        if fs::symlink_metadata(&local_path).is_ok() {
             println!("  [SYNC] {}", name.to_string_lossy());
-            copy_recursive(&local_path, &vault_path)?;
+            copy_recursive(&local_path, &vault_path, false)?;
         } else {
             println!("  [DELETE] {} (not found locally)", name.to_string_lossy());
-            if vault_path.is_dir() {
-                fs::remove_dir_all(&vault_path)?;
-            } else {
-                fs::remove_file(&vault_path)?;
+            if let Ok(meta) = fs::symlink_metadata(&vault_path) {
+                if meta.is_dir() {
+                    fs::remove_dir_all(&vault_path)?;
+                } else {
+                    fs::remove_file(&vault_path)?;
+                }
             }
         }
     }
@@ -252,13 +264,43 @@ pub fn pull() -> std::io::Result<()> {
 
     if vault_project_path.exists() {
         println!("Restoring tracked files...");
-        copy_recursive(&vault_project_path, &repo_root)?;
+        copy_recursive(&vault_project_path, &repo_root, false)?;
     }
     Ok(())
 }
 
-pub fn copy_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
-    if src.is_dir() {
+pub fn copy_recursive(src: &Path, dst: &Path, follow_links: bool) -> std::io::Result<()> {
+    let metadata = fs::symlink_metadata(src)?;
+
+    if metadata.is_symlink() && !follow_links {
+        let target = fs::read_link(src)?;
+        if let Some(parent) = dst.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent)?;
+        }
+        if dst.exists() {
+            if dst.is_dir() {
+                fs::remove_dir_all(dst)?;
+            } else {
+                fs::remove_file(dst)?;
+            }
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target, dst)?;
+        #[cfg(windows)]
+        {
+            if let Ok(target_meta) = fs::metadata(src) {
+                if target_meta.is_dir() {
+                    std::os::windows::fs::symlink_dir(target, dst)?;
+                } else {
+                    std::os::windows::fs::symlink_file(target, dst)?;
+                }
+            } else {
+                std::os::windows::fs::symlink_file(target, dst)?;
+            }
+        }
+    } else if metadata.is_dir() {
         if !dst.exists() {
             fs::create_dir_all(dst)?;
         }
@@ -268,7 +310,7 @@ pub fn copy_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
             if name == ".git" {
                 continue;
             }
-            copy_recursive(&entry.path(), &dst.join(name))?;
+            copy_recursive(&entry.path(), &dst.join(name), follow_links)?;
         }
     } else {
         if let Some(parent) = dst.parent()

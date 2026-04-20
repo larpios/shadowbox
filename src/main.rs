@@ -31,6 +31,9 @@ enum Commands {
     Track {
         /// A list of patterns to the files to track (supports globs)
         patterns: Vec<String>,
+        /// Follow symlinks (copy the target instead of the link)
+        #[arg(long, short)]
+        follow_links: bool,
     },
     /// Untrack a file or directory by removing it from the vault
     #[command(alias = "ut", alias = "u")]
@@ -143,7 +146,10 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        Some(Commands::Track { patterns: paths }) => match ops::track_files(paths.as_slice()) {
+        Some(Commands::Track {
+            patterns,
+            follow_links,
+        }) => match ops::track_files(patterns.as_slice(), *follow_links) {
             Ok(paths) => {
                 for p in paths {
                     println!("Tracked {}", p.display());
