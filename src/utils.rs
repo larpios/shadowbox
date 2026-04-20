@@ -109,6 +109,14 @@ pub fn copy_recursive(src: &Path, dst: &Path, follow_links: bool) -> std::io::Re
     Ok(())
 }
 
+pub fn is_binary(path: &Path) -> std::io::Result<bool> {
+    use std::io::Read;
+    let mut file = fs::File::open(path)?;
+    let mut buffer = [0u8; 1024];
+    let n = file.read(&mut buffer)?;
+    Ok(buffer[..n].contains(&0))
+}
+
 pub fn get_vault_project_path(config: &Config, repo_id: &str) -> std::io::Result<PathBuf> {
     let store_name = resolve_store(config, repo_id)
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Link a vault first"))?;

@@ -1,14 +1,25 @@
 use crate::config::Config;
 use crate::git::{get_repo_id, get_repo_root};
-use crate::utils::get_vault_project_path;
+use crate::utils::{get_vault_project_path, is_binary, resolve_store};
 use std::fs;
 use std::path::Path;
+
+#[derive(Debug)]
+struct FileStatus {
+    path: String,
+    state: String,
+    file_type: String,
+    target: Option<String>,
+}
 
 pub fn run() -> std::io::Result<()> {
     let config = Config::load()?;
     let repo_id = get_repo_id()?;
     let vault_project_path = get_vault_project_path(&config, &repo_id)?;
     let repo_root = get_repo_root()?;
+    let store_name = resolve_store(&config, &repo_id)
+        .map(|s| s.as_str())
+        .unwrap_or("unknown");
 
     let mut results = Vec::new();
     if vault_project_path.exists() {
@@ -20,8 +31,25 @@ pub fn run() -> std::io::Result<()> {
         )?;
     }
 
+    if results.is_empty() {
+        println!("No files tracked in this repository.");
+        return Ok(());
+    }
+
+    println!("Status for repo: {} (Vault: {})", repo_id, store_name);
+    println!("");
+    println!(
+        "{:<10} {:<10} {:<30} {:<30}",
+        "STATE", "TYPE", "PATH", "TARGET"
+    );
+    println!("{}", "-".repeat(100));
+
     for file in results {
-        println!("{}", file);
+        let target_str = file.target.as_deref().unwrap_or("");
+        println!(
+            "{:<10} {:<10} {:<30} {}",
+            file.state, file.file_type, file.path, target_str
+        );
     }
     Ok(())
 }
@@ -30,10 +58,12 @@ fn collect_status(
     vault_root: &Path,
     current_dir: &Path,
     repo_root: &Path,
-    results: &mut Vec<String>,
+    results: &mut Vec<FileStatus>,
 ) -> std::io::Result<()> {
-    for entry in fs::read_dir(current_dir)? {
-        let entry = entry?;
+    let mut entries: Vec<_> = fs::read_dir(current_dir)?.collect::<Result<_, _>>()?;
+    entries.sort_by_key(|e| e.path());
+
+    for entry in entries {
         let path = entry.path();
         let name = entry.file_name();
         if name == ".git" {
@@ -47,12 +77,34 @@ fn collect_status(
             let local_path = repo_root.join(rel_path);
             let display_name = rel_path.to_string_lossy().to_string();
 
-            // Use symlink_metadata to correctly check for existence of symlinks (even broken ones)
-            if fs::symlink_metadata(&local_path).is_ok() {
-                results.push(display_name);
-            } else {
-                results.push(format!("[MISSING] {}", display_name));
+            let mut state = "TRACKED".to_string();
+            let mut file_type = "FILE".to_string();
+            let mut target = None;
+
+            match fs::symlink_metadata(&local_path) {
+                Ok(local_metadata) => {
+                    if local_metadata.is_symlink() {
+                        file_type = "SYMLINK".to_string();
+                        if let Ok(link_target) = fs::read_link(&local_path) {
+                            target = Some(format!("-> {}", link_target.display()));
+                        }
+                    } else if local_metadata.is_dir() {
+                        file_type = "DIR".to_string();
+                    } else if is_binary(&local_path).unwrap_or(false) {
+                        file_type = "BINARY".to_string();
+                    }
+                }
+                Err(_) => {
+                    state = "MISSING".to_string();
+                }
             }
+
+            results.push(FileStatus {
+                path: display_name,
+                state,
+                file_type,
+                target,
+            });
         }
     }
     Ok(())
@@ -160,6 +212,8 @@ mod tests {
         fs::remove_file(dir.path().join(file1)).unwrap();
 
         let output = run_shadowbox(vec!["status"], dir.path(), home_dir.path());
-        assert!(String::from_utf8_lossy(&output.stdout).contains("[MISSING] missing.txt"));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("MISSING"));
+        assert!(stdout.contains("missing.txt"));
     }
 }

@@ -10,14 +10,14 @@ pub fn run() -> std::io::Result<()> {
     let store_dir = get_store_dir(&config, &repo_id)?;
     let repo_root = get_repo_root()?;
 
-    println!("Pulling from vault...");
+    println!("[PULL] Fetching updates from vault...");
     Command::new("git")
         .current_dir(&store_dir)
         .args(["pull", "--no-verify"])
         .status()?;
 
     if vault_project_path.exists() {
-        println!("Restoring tracked files...");
+        println!("[RESTORE] Syncing files to local repository...");
         copy_recursive(&vault_project_path, &repo_root, false)?;
     }
     println!("Pull complete.");

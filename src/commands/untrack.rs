@@ -23,7 +23,7 @@ pub fn run(path: &str) -> std::io::Result<()> {
             fs::remove_file(target)?;
         }
     }
-    println!("Untracked {}", rel_to_root.display());
+    println!("[UNTRACK] {}", rel_to_root.display());
     Ok(())
 }
 

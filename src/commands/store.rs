@@ -53,8 +53,16 @@ pub fn add(name: &str, url: &str, force: bool) -> std::io::Result<()> {
 
 pub fn list() -> std::io::Result<()> {
     let config = Config::load()?;
-    for (name, store) in config.stores {
-        println!("{}: {}", name, store.url);
+    if config.stores.is_empty() {
+        println!("No stores configured.");
+        return Ok(());
+    }
+    println!("{:<20} {:<30}", "NAME", "URL");
+    println!("{}", "-".repeat(60));
+    let mut stores: Vec<_> = config.stores.into_iter().collect();
+    stores.sort_by(|a, b| a.0.cmp(&b.0));
+    for (name, store) in stores {
+        println!("{:<20} {:<30}", name, store.url);
     }
     Ok(())
 }

@@ -6,12 +6,15 @@ use std::path::PathBuf;
 use std::process::Command;
 
 pub fn run(path_patterns: &[String], follow_links: bool) -> std::io::Result<()> {
-    let mut tracked = Vec::new();
+    let mut tracked_count = 0;
     for pattern in path_patterns {
-        tracked.append(&mut track_file(pattern, follow_links)?);
+        let tracked = track_file(pattern, follow_links)?;
+        tracked_count += tracked.len();
     }
-    for p in tracked {
-        println!("Tracked {}", p.display());
+    if tracked_count > 0 {
+        println!("\nSuccessfully tracked {} file(s).", tracked_count);
+    } else {
+        println!("No files matched the pattern(s).");
     }
     Ok(())
 }
