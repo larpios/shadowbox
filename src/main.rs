@@ -29,8 +29,8 @@ enum Commands {
     /// Track a file or directory in the private vault
     #[command(alias = "tr", alias = "t")]
     Track {
-        /// Path to the file to track (supports globs)
-        path: String,
+        /// A list of patterns to the files to track (supports globs)
+        patterns: Vec<String>,
     },
     /// Untrack a file or directory by removing it from the vault
     #[command(alias = "ut", alias = "u")]
@@ -143,7 +143,7 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        Some(Commands::Track { path }) => match ops::track_file(path) {
+        Some(Commands::Track { patterns: paths }) => match ops::track_files(paths.as_slice()) {
             Ok(paths) => {
                 for p in paths {
                     println!("Tracked {}", p.display());

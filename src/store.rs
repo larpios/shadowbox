@@ -38,8 +38,7 @@ pub fn add_store(name: &str, url: &str, force: bool) -> std::io::Result<()> {
     if !status.success() {
         // CLEANUP: delete the directory if clone failed so user can retry
         let _ = fs::remove_dir_all(&store_dir);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             "Failed to clone store repository. Check your URL/permissions and try again.",
         ));
     }

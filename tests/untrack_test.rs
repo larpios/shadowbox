@@ -27,18 +27,40 @@ fn test_untrack_subcommand() {
     };
 
     // Setup
-    Command::new("git").args(["init", "--bare"]).current_dir(remote_store_dir.path()).status().unwrap();
-    Command::new("git").args(["init"]).current_dir(dir.path()).status().unwrap();
-    Command::new("git").args(["remote", "add", "origin", "https://github.com/user/project"]).current_dir(dir.path()).status().unwrap();
+    Command::new("git")
+        .args(["init", "--bare"])
+        .current_dir(remote_store_dir.path())
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["init"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
+    Command::new("git")
+        .args(["remote", "add", "origin", "https://github.com/user/project"])
+        .current_dir(dir.path())
+        .status()
+        .unwrap();
 
-    run_shadowbox(vec!["store", "add", "my_store", &remote_store_dir.path().to_string_lossy()], dir.path());
+    run_shadowbox(
+        vec![
+            "store",
+            "add",
+            "my_store",
+            &remote_store_dir.path().to_string_lossy(),
+        ],
+        dir.path(),
+    );
 
     let test_file = "test.log";
     fs::write(dir.path().join(test_file), "content").unwrap();
 
     // Track then untrack
     run_shadowbox(vec!["track", test_file], dir.path());
-    let store_file_path = data_home.join("shadowbox/stores/my_store/github.com/user/project").join(test_file);
+    let store_file_path = data_home
+        .join("shadowbox/stores/my_store/github.com/user/project")
+        .join(test_file);
     assert!(store_file_path.exists());
 
     let output = run_shadowbox(vec!["untrack", test_file], dir.path());

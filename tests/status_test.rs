@@ -26,7 +26,6 @@ fn test_status_command() {
             .expect("Failed to execute shadowbox")
     };
 
-
     // Setup store and mapping
     Command::new("git")
         .args(["init", "--bare"])
@@ -86,7 +85,6 @@ fn test_status_missing_file() {
             .output()
             .expect("Failed to execute shadowbox")
     };
-
 
     // Setup store and mapping
     Command::new("git")

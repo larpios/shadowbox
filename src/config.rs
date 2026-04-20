@@ -21,9 +21,8 @@ impl Config {
         let config_path = config_dir()?.join("config.toml");
         if config_path.exists() {
             let content = fs::read_to_string(config_path)?;
-            Ok(toml::from_str(&content).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
-            })?)
+            Ok(toml::from_str(&content)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?)
         } else {
             Ok(Config::default())
         }
@@ -33,9 +32,8 @@ impl Config {
         let dir = config_dir()?;
         fs::create_dir_all(&dir)?;
         let config_path = dir.join("config.toml");
-        let content = toml::to_string(self).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())
-        })?;
+        let content = toml::to_string(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
         fs::write(config_path, content)
     }
 }
@@ -45,7 +43,10 @@ pub fn config_dir() -> std::io::Result<PathBuf> {
         return Ok(PathBuf::from(val).join("shadowbox"));
     }
     let home = std::env::var("HOME").map_err(|_| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "HOME environment variable not set")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "HOME environment variable not set",
+        )
     })?;
     Ok(PathBuf::from(home).join(".config").join("shadowbox"))
 }
@@ -55,7 +56,13 @@ pub fn data_dir() -> std::io::Result<PathBuf> {
         return Ok(PathBuf::from(val).join("shadowbox"));
     }
     let home = std::env::var("HOME").map_err(|_| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "HOME environment variable not set")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "HOME environment variable not set",
+        )
     })?;
-    Ok(PathBuf::from(home).join(".local").join("share").join("shadowbox"))
+    Ok(PathBuf::from(home)
+        .join(".local")
+        .join("share")
+        .join("shadowbox"))
 }
