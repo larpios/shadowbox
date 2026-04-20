@@ -1,7 +1,7 @@
+mod commands;
 mod config;
 mod git;
-mod ops;
-mod store;
+mod utils;
 
 use clap::{Parser, Subcommand};
 
@@ -101,113 +101,55 @@ enum HookCommands {
 fn main() {
     let cli = Cli::parse();
 
-    match &cli.command {
-        Some(Commands::Link { store }) => match ops::link(store) {
-            Ok(_) => println!("Current project linked to store '{}'.", store),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
-        Some(Commands::Pull) => match ops::pull() {
-            Ok(_) => println!("Pull complete."),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
-        Some(Commands::Push) => match ops::push() {
-            Ok(_) => println!("Push complete."),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
+    let result = match &cli.command {
+        Some(Commands::Link { store }) => commands::link::run(store),
+        Some(Commands::Pull) => commands::pull::run(),
+        Some(Commands::Push) => commands::push::run(),
         Some(Commands::Store { command }) => match command {
-            StoreCommands::Add { name, url, force } => match store::add_store(name, url, *force) {
-                Ok(_) => println!("Store '{}' added.", name),
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
-            },
-            StoreCommands::List => match store::list_stores() {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Error: {}", e);
-                    std::process::exit(1);
-                }
-            },
+            StoreCommands::Add { name, url, force } => commands::store::add(name, url, *force),
+            StoreCommands::List => commands::store::list(),
         },
-        Some(Commands::Map { pattern, store }) => match store::add_mapping(pattern, store) {
-            Ok(_) => println!("Mapped '{}' to '{}'.", pattern, store),
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
+        Some(Commands::Map { pattern, store }) => commands::store::add_mapping(pattern, store),
         Some(Commands::Track {
             patterns,
             follow_links,
-        }) => match ops::track_files(patterns.as_slice(), *follow_links) {
-            Ok(paths) => {
-                for p in paths {
-                    println!("Tracked {}", p.display());
-                }
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
-        Some(Commands::Untrack { path }) => match ops::untrack_file(path) {
-            Ok(normalized_path) => {
-                println!("Untracked {}", normalized_path.display());
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
-        Some(Commands::Status) => match ops::status() {
-            Ok(files) => {
-                for file in files {
-                    println!("{}", file);
-                }
-            }
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
+        }) => commands::track::run(patterns, *follow_links),
+        Some(Commands::Untrack { path }) => commands::untrack::run(path),
+        Some(Commands::Status) => commands::status::run(),
         Some(Commands::Hooks { command }) => match command {
-            HookCommands::Install => match git::install_hooks() {
-                Ok(_) => println!("Hooks installed successfully."),
-                Err(e) => {
-                    eprintln!("Error installing hooks: {}", e);
-                    std::process::exit(1);
-                }
-            },
-            HookCommands::Uninstall => match git::uninstall_hooks() {
-                Ok(_) => println!("Hooks uninstalled successfully."),
-                Err(e) => {
-                    eprintln!("Error uninstalling hooks: {}", e);
-                    std::process::exit(1);
-                }
-            },
+            HookCommands::Install => commands::hooks::install(),
+            HookCommands::Uninstall => commands::hooks::uninstall(),
         },
         Some(Commands::Version) => {
             println!("Shadowbox v{}", env!("CARGO_PKG_VERSION"));
+            Ok(())
         }
-        Some(Commands::Debug) => match ops::debug_info() {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                std::process::exit(1);
-            }
-        },
+        Some(Commands::Debug) => commands::debug::run(),
         None => {
             println!("No command specified. Use --help for more info.");
+            Ok(())
         }
+    };
+
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::Command;
+
+    #[test]
+    fn test_help_output() {
+        let output = Command::new("cargo")
+            .args(["run", "--", "--help"])
+            .output()
+            .expect("Failed to execute command");
+
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Usage: shadowbox"));
     }
 }
