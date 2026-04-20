@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::git::{get_repo_id, get_repo_root};
 use crate::utils::{get_vault_project_path, is_binary, resolve_store};
+use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
@@ -32,23 +33,75 @@ pub fn run() -> std::io::Result<()> {
     }
 
     if results.is_empty() {
-        println!("No files tracked in this repository.");
+        println!("{}", "No files tracked in this repository.".yellow());
         return Ok(());
     }
 
-    println!("Status for repo: {} (Vault: {})", repo_id, store_name);
-    println!("");
+    let mut max_path_len = 40;
+    let mut max_target_len = 30;
+
+    for file in &results {
+        if file.path.len() > max_path_len {
+            max_path_len = file.path.len();
+        }
+        if let Some(target) = &file.target
+            && target.len() > max_target_len
+        {
+            max_target_len = target.len();
+        }
+    }
+
     println!(
-        "{:<10} {:<10} {:<30} {:<30}",
-        "STATE", "TYPE", "PATH", "TARGET"
+        "Status for repo: {} (Vault: {})",
+        repo_id.bold(),
+        store_name.cyan()
     );
-    println!("{}", "-".repeat(100));
+    println!();
+
+    let header_state = format!("{:<10}", "STATE");
+    let header_type = format!("{:<10}", "TYPE");
+    let header_path = format!("{:<width$}", "PATH", width = max_path_len);
+    let header_target = format!("{:<width$}", "TARGET", width = max_target_len);
+
+    println!(
+        "| {} | {} | {} | {} |",
+        header_state.bold(),
+        header_type.bold(),
+        header_path.bold(),
+        header_target.bold()
+    );
+
+    println!(
+        "|{}|{}|{}|{}|",
+        "-".repeat(12),
+        "-".repeat(12),
+        "-".repeat(max_path_len + 2),
+        "-".repeat(max_target_len + 2)
+    );
 
     for file in results {
         let target_str = file.target.as_deref().unwrap_or("");
+
+        let state_col = match file.state.as_str() {
+            "TRACKED" => format!("{:<10}", file.state).green(),
+            "MISSING" => format!("{:<10}", file.state).red(),
+            _ => format!("{:<10}", file.state).normal(),
+        };
+
+        let type_col = match file.file_type.as_str() {
+            "DIR" => format!("{:<10}", file.file_type).blue(),
+            "SYMLINK" => format!("{:<10}", file.file_type).cyan(),
+            "BINARY" => format!("{:<10}", file.file_type).magenta(),
+            "FILE" => format!("{:<10}", file.file_type).normal(),
+            _ => format!("{:<10}", file.file_type).normal(),
+        };
+
+        let path_col = format!("{:<width$}", file.path, width = max_path_len).normal();
+        let target_col = format!("{:<width$}", target_str, width = max_target_len).bright_black();
+
         println!(
-            "{:<10} {:<10} {:<30} {}",
-            file.state, file.file_type, file.path, target_str
+            "| {} | {} | {} | {} |",
+            state_col, type_col, path_col, target_col
         );
     }
     Ok(())

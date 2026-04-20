@@ -1,4 +1,5 @@
 use crate::config::{Config, StoreConfig, data_dir};
+use colored::Colorize;
 use std::fs;
 use std::process::Command;
 
@@ -54,15 +55,40 @@ pub fn add(name: &str, url: &str, force: bool) -> std::io::Result<()> {
 pub fn list() -> std::io::Result<()> {
     let config = Config::load()?;
     if config.stores.is_empty() {
-        println!("No stores configured.");
+        println!("{}", "No stores configured.".yellow());
         return Ok(());
     }
-    println!("{:<20} {:<30}", "NAME", "URL");
-    println!("{}", "-".repeat(60));
+
+    let mut max_name_len = 20;
+    let mut max_url_len = 50;
+
     let mut stores: Vec<_> = config.stores.into_iter().collect();
     stores.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (name, store) in &stores {
+        if name.len() > max_name_len {
+            max_name_len = name.len();
+        }
+        if store.url.len() > max_url_len {
+            max_url_len = store.url.len();
+        }
+    }
+
+    let header_name = format!("{:<width$}", "NAME", width = max_name_len);
+    let header_url = format!("{:<width$}", "URL", width = max_url_len);
+
+    println!("| {} | {} |", header_name.bold(), header_url.bold());
+    println!(
+        "|{}|{}|",
+        "-".repeat(max_name_len + 2),
+        "-".repeat(max_url_len + 2)
+    );
+
     for (name, store) in stores {
-        println!("{:<20} {:<30}", name, store.url);
+        let name_col = format!("{:<width$}", name, width = max_name_len).cyan();
+        let url_col = format!("{:<width$}", store.url, width = max_url_len).normal();
+
+        println!("| {} | {} |", name_col, url_col);
     }
     Ok(())
 }
