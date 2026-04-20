@@ -16,8 +16,8 @@ pub fn run(path: &str) -> std::io::Result<()> {
     let vault_project_path = get_vault_project_path(&config, &repo_id)?;
     let target = vault_project_path.join(rel_to_root);
 
-    if target.exists() {
-        if target.is_dir() {
+    if let Ok(metadata) = fs::symlink_metadata(&target) {
+        if metadata.is_dir() {
             fs::remove_dir_all(target)?;
         } else {
             fs::remove_file(target)?;

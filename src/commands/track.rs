@@ -22,6 +22,7 @@ fn track_file(path_pattern: &str, follow_links: bool) -> std::io::Result<Vec<Pat
     let vault_project_path = get_vault_project_path(&config, &repo_id)?;
     let store_dir = get_store_dir(&config, &repo_id)?;
     let repo_root = get_repo_root()?;
+    let canonical_repo_root = fs::canonicalize(&repo_root).unwrap_or_else(|_| repo_root.clone());
 
     let mut tracked = Vec::new();
     for entry in glob::glob(path_pattern)
@@ -33,6 +34,22 @@ fn track_file(path_pattern: &str, follow_links: bool) -> std::io::Result<Vec<Pat
         // For destination path in vault, we always use the path as specified (relative to repo root)
         let abs_for_rel = std::path::absolute(&local_path)?;
 
+        // Try to strip prefix from both original repo_root and canonicalized repo_root
+        // This helps when the repo path contains symlinks (like /var -> /private/var on macOS)
+        let rel_to_root = abs_for_rel
+            .strip_prefix(&repo_root)
+            .or_else(|_| abs_for_rel.strip_prefix(&canonical_repo_root))
+            .map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "Path {} is outside repository {}",
+                        abs_for_rel.display(),
+                        repo_root.display()
+                    ),
+                )
+            })?;
+
         // For source path to copy from, we follow links only if follow_links is true
         let src_path = if follow_links {
             fs::canonicalize(&local_path)?
@@ -40,15 +57,13 @@ fn track_file(path_pattern: &str, follow_links: bool) -> std::io::Result<Vec<Pat
             abs_for_rel.clone()
         };
 
-        let rel_to_root = abs_for_rel
-            .strip_prefix(&repo_root)
-            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Outside repo"))?;
-
         let dest = vault_project_path.join(rel_to_root);
         println!("  [TRACK] {} -> vault", rel_to_root.display());
         copy_recursive(&src_path, &dest, follow_links)?;
+
         // LFS support
         if is_lfs_available() {
+            // Check metadata of the source (follows links if follow_links is true due to canonicalize above)
             let metadata = fs::metadata(&src_path)?;
             if metadata.is_file() && metadata.len() > 5 * 1024 * 1024 {
                 // Only track in LFS if it's not a symlink OR we followed it
@@ -99,7 +114,14 @@ mod tests {
             cmd.env("PATH", path_val);
         }
 
-        cmd.output().expect("Failed to execute shadowbox")
+        let output = cmd.output().expect("Failed to execute shadowbox");
+        if !output.status.success() {
+            println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
+            println!("STDERR: {}", String::from_utf8_lossy(&output.stderr));
+        } else {
+            println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
+        }
+        output
     }
 
     #[test]
@@ -443,6 +465,337 @@ exit 0
                 .path()
                 .join(".local/share/shadowbox/stores/only_one/github.com/user/project/.env")
                 .exists()
+        );
+    }
+
+    #[test]
+    fn test_symlink_tracking() {
+        let home_dir = tempdir().expect("Failed to create temp home");
+        let remote_store_dir = tempdir().expect("Failed to create temp remote store");
+        let project_dir = tempdir().expect("Failed to create temp project");
+
+        Command::new("git")
+            .args(["init", "--bare"])
+            .current_dir(remote_store_dir.path())
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["init"])
+            .current_dir(project_dir.path())
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["remote", "add", "origin", "https://github.com/user/project"])
+            .current_dir(project_dir.path())
+            .status()
+            .unwrap();
+
+        run_shadowbox(
+            vec![
+                "store",
+                "add",
+                "my_store",
+                &remote_store_dir.path().to_string_lossy(),
+            ],
+            project_dir.path(),
+            home_dir.path(),
+            None,
+        );
+
+        // Create a target file
+        let target_file = "target.txt";
+        fs::write(project_dir.path().join(target_file), "original content").unwrap();
+
+        // Create a symlink
+        let link_file = "link.txt";
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target_file, project_dir.path().join(link_file)).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(target_file, project_dir.path().join(link_file))
+            .unwrap();
+
+        let output = run_shadowbox(
+            vec!["track", link_file],
+            project_dir.path(),
+            home_dir.path(),
+            None,
+        );
+        assert!(output.status.success());
+
+        let store_path = home_dir
+            .path()
+            .join(".local/share/shadowbox/stores/my_store/github.com/user/project/link.txt");
+
+        assert!(
+            fs::symlink_metadata(&store_path).is_ok(),
+            "Link should exist in store"
+        );
+        let meta = fs::symlink_metadata(&store_path).unwrap();
+        assert!(meta.is_symlink(), "Tracked file should be a symlink");
+
+        let target = fs::read_link(&store_path).unwrap();
+        assert_eq!(target.to_str().unwrap(), target_file);
+    }
+
+    #[test]
+    fn test_track_symlink_to_dir_follow() {
+        let home_dir = tempdir().expect("Failed to create temp home");
+        let remote_store_dir = tempdir().expect("Failed to create temp remote store");
+        let project_dir = tempdir().expect("Failed to create temp project");
+
+        Command::new("git")
+            .args(["init", "--bare"])
+            .current_dir(remote_store_dir.path())
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["init"])
+            .current_dir(project_dir.path())
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["remote", "add", "origin", "https://github.com/user/project"])
+            .current_dir(project_dir.path())
+            .status()
+            .unwrap();
+
+        run_shadowbox(
+            vec![
+                "store",
+                "add",
+                "my_store",
+                &remote_store_dir.path().to_string_lossy(),
+            ],
+            project_dir.path(),
+            home_dir.path(),
+            None,
+        );
+
+        // Create a directory with a file
+        let real_dir = "real_dir";
+        fs::create_dir_all(project_dir.path().join(real_dir)).unwrap();
+        fs::write(
+            project_dir.path().join(real_dir).join("file.txt"),
+            "content",
+        )
+        .unwrap();
+
+        // Create a symlink to that directory
+        let link_dir = "link_dir";
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(real_dir, project_dir.path().join(link_dir)).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(real_dir, project_dir.path().join(link_dir)).unwrap();
+
+        let output = run_shadowbox(
+            vec!["track", "--follow-links", link_dir],
+            project_dir.path(),
+            home_dir.path(),
+            None,
+        );
+        assert!(output.status.success());
+
+        let store_path = home_dir
+            .path()
+            .join(".local/share/shadowbox/stores/my_store/github.com/user/project/link_dir");
+
+        assert!(
+            store_path.is_dir(),
+            "link_dir should be a directory in store (followed)"
+        );
+        assert!(
+            store_path.join("file.txt").exists(),
+            "file.txt should exist in store"
+        );
+    }
+
+    #[test]
+    fn test_glob_symlink_tracking() {
+        let home_dir = tempdir().expect("Failed to create temp home");
+        let remote_store_dir = tempdir().expect("Failed to create temp remote store");
+        let project_dir = tempdir().expect("Failed to create temp project");
+
+        Command::new("git")
+            .args(["init", "--bare"])
+            .current_dir(remote_store_dir.path())
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["init"])
+            .current_dir(project_dir.path())
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["remote", "add", "origin", "https://github.com/user/project"])
+            .current_dir(project_dir.path())
+            .status()
+            .unwrap();
+
+        run_shadowbox(
+            vec![
+                "store",
+                "add",
+                "my_store",
+                &remote_store_dir.path().to_string_lossy(),
+            ],
+            project_dir.path(),
+            home_dir.path(),
+            None,
+        );
+
+        // Create a target file
+        let target_file = "target.txt";
+        fs::write(project_dir.path().join(target_file), "original content").unwrap();
+
+        // Create a symlink
+        let link_file = "link.txt";
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(target_file, project_dir.path().join(link_file)).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(target_file, project_dir.path().join(link_file))
+            .unwrap();
+
+        let output = run_shadowbox(
+            vec!["track", "*.txt"],
+            project_dir.path(),
+            home_dir.path(),
+            None,
+        );
+        assert!(output.status.success());
+
+        let store_path = home_dir
+            .path()
+            .join(".local/share/shadowbox/stores/my_store/github.com/user/project/link.txt");
+
+        assert!(
+            fs::symlink_metadata(&store_path).is_ok(),
+            "Link should exist in store"
+        );
+        assert!(
+            fs::symlink_metadata(&store_path).unwrap().is_symlink(),
+            "Tracked file should be a symlink"
+        );
+    }
+
+    #[test]
+    fn test_path_mismatch_repro() {
+        let temp = tempdir().expect("Failed to create temp home");
+        let base_dir = temp.path().join("base");
+        fs::create_dir_all(&base_dir).unwrap();
+
+        let real_repo = base_dir.join("real_repo");
+        fs::create_dir_all(&real_repo).unwrap();
+
+        let link_repo = base_dir.join("link_repo");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("real_repo", &link_repo).unwrap();
+
+        #[cfg(unix)]
+        {
+            Command::new("git")
+                .args(["init"])
+                .current_dir(&real_repo)
+                .status()
+                .unwrap();
+            Command::new("git")
+                .args(["remote", "add", "origin", "https://github.com/user/project"])
+                .current_dir(&real_repo)
+                .status()
+                .unwrap();
+
+            let home_dir = temp.path().join("home");
+            let remote_store_dir = temp.path().join("remote_store");
+            fs::create_dir_all(&remote_store_dir).unwrap();
+            Command::new("git")
+                .args(["init", "--bare"])
+                .current_dir(&remote_store_dir)
+                .status()
+                .unwrap();
+
+            run_shadowbox(
+                vec![
+                    "store",
+                    "add",
+                    "my_store",
+                    &remote_store_dir.to_string_lossy(),
+                ],
+                &link_repo,
+                &home_dir,
+                None,
+            );
+
+            let test_file = "test.txt";
+            fs::write(real_repo.join(test_file), "content").unwrap();
+
+            let output = run_shadowbox(vec!["track", test_file], &link_repo, &home_dir, None);
+            assert!(
+                output.status.success(),
+                "Track should succeed even through a symlinked repo path"
+            );
+        }
+    }
+
+    #[test]
+    fn test_glob_through_symlink_dir() {
+        let home_dir = tempdir().expect("Failed to create temp home");
+        let remote_store_dir = tempdir().expect("Failed to create temp remote store");
+        let project_dir = tempdir().expect("Failed to create temp project");
+
+        Command::new("git")
+            .args(["init", "--bare"])
+            .current_dir(remote_store_dir.path())
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["init"])
+            .current_dir(project_dir.path())
+            .status()
+            .unwrap();
+        Command::new("git")
+            .args(["remote", "add", "origin", "https://github.com/user/project"])
+            .current_dir(project_dir.path())
+            .status()
+            .unwrap();
+
+        run_shadowbox(
+            vec![
+                "store",
+                "add",
+                "my_store",
+                &remote_store_dir.path().to_string_lossy(),
+            ],
+            project_dir.path(),
+            home_dir.path(),
+            None,
+        );
+
+        let real_dir = "real_dir";
+        fs::create_dir_all(project_dir.path().join(real_dir)).unwrap();
+        fs::write(
+            project_dir.path().join(real_dir).join("file.txt"),
+            "content",
+        )
+        .unwrap();
+
+        let link_dir = "link_dir";
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(real_dir, project_dir.path().join(link_dir)).unwrap();
+
+        let output = run_shadowbox(
+            vec!["track", "link_dir/*.txt"],
+            project_dir.path(),
+            home_dir.path(),
+            None,
+        );
+        assert!(output.status.success());
+
+        let store_path = home_dir.path().join(
+            ".local/share/shadowbox/stores/my_store/github.com/user/project/link_dir/file.txt",
+        );
+
+        assert!(
+            store_path.exists(),
+            "file.txt should exist in store even if tracked through a symlinked directory"
         );
     }
 }

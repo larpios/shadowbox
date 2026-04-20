@@ -39,13 +39,16 @@ fn collect_status(
         if name == ".git" {
             continue;
         }
-        if path.is_dir() {
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.is_dir() {
             collect_status(vault_root, &path, repo_root, results)?;
         } else {
             let rel_path = path.strip_prefix(vault_root).unwrap();
             let local_path = repo_root.join(rel_path);
             let display_name = rel_path.to_string_lossy().to_string();
-            if local_path.exists() {
+
+            // Use symlink_metadata to correctly check for existence of symlinks (even broken ones)
+            if fs::symlink_metadata(&local_path).is_ok() {
                 results.push(display_name);
             } else {
                 results.push(format!("[MISSING] {}", display_name));

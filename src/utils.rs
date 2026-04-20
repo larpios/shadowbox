@@ -29,22 +29,26 @@ pub fn is_lfs_available() -> bool {
 }
 
 pub fn copy_recursive(src: &Path, dst: &Path, follow_links: bool) -> std::io::Result<()> {
-    let metadata = fs::symlink_metadata(src)?;
+    let src_metadata = fs::symlink_metadata(src)?;
 
-    if metadata.is_symlink() && !follow_links {
+    if src_metadata.is_symlink() && !follow_links {
         let target = fs::read_link(src)?;
+
         if let Some(parent) = dst.parent()
             && !parent.exists()
         {
             fs::create_dir_all(parent)?;
         }
-        if dst.exists() {
-            if dst.is_dir() {
+
+        // Check if destination exists (even if it's a broken symlink)
+        if fs::symlink_metadata(dst).is_ok() {
+            if dst.is_dir() && !fs::symlink_metadata(dst)?.is_symlink() {
                 fs::remove_dir_all(dst)?;
             } else {
                 fs::remove_file(dst)?;
             }
         }
+
         #[cfg(unix)]
         std::os::unix::fs::symlink(target, dst)?;
         #[cfg(windows)]
@@ -59,7 +63,22 @@ pub fn copy_recursive(src: &Path, dst: &Path, follow_links: bool) -> std::io::Re
                 std::os::windows::fs::symlink_file(target, dst)?;
             }
         }
-    } else if metadata.is_dir() {
+        return Ok(());
+    }
+
+    // If we are following links, get the metadata of the target
+    let metadata = if follow_links {
+        fs::metadata(src)?
+    } else {
+        src_metadata
+    };
+
+    if metadata.is_dir() {
+        if fs::symlink_metadata(dst).is_ok()
+            && (!dst.is_dir() || fs::symlink_metadata(dst)?.is_symlink())
+        {
+            fs::remove_file(dst)?;
+        }
         if !dst.exists() {
             fs::create_dir_all(dst)?;
         }
@@ -77,6 +96,14 @@ pub fn copy_recursive(src: &Path, dst: &Path, follow_links: bool) -> std::io::Re
         {
             fs::create_dir_all(parent)?;
         }
+        // If destination is a directory but source is a file, remove the directory
+        if fs::symlink_metadata(dst).is_ok()
+            && dst.is_dir()
+            && !fs::symlink_metadata(dst)?.is_symlink()
+        {
+            fs::remove_dir_all(dst)?;
+        }
+        // fs::copy will overwrite files/symlinks
         fs::copy(src, dst)?;
     }
     Ok(())
