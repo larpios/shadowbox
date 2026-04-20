@@ -15,7 +15,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Link the current repository to a specific store
-    #[command(alias = "ln")]
+    #[command(alias = "ln", alias = "l")]
     Link {
         /// Name of the store to link to
         store: String,
