@@ -24,7 +24,7 @@ enum Commands {
     #[command(alias = "pl")]
     Pull,
     /// Push local changes to the private remote store
-    #[command(alias = "ps", alias = "ph")]
+    #[command(alias = "ps")]
     Push,
     /// Track a file or directory in the private vault
     #[command(alias = "tr", alias = "t")]
@@ -39,7 +39,7 @@ enum Commands {
         path: String,
     },
     /// List all tracked files
-    #[command(alias = "st", alias = "s")]
+    #[command(alias = "st")]
     Status,
     /// Manage Git hooks for automatic syncing
     #[command(alias = "h")]
@@ -48,7 +48,7 @@ enum Commands {
         command: HookCommands,
     },
     /// Manage private stores
-    #[command(alias = "sr", alias = "v")]
+    #[command(alias = "s", alias = "v")]
     Store {
         #[command(subcommand)]
         command: StoreCommands,
