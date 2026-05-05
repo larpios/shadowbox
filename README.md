@@ -14,6 +14,14 @@ Think of it like **chezmoi**, but specifically designed to manage private overla
 
 ## Installation
 
+### Binary Releases
+Pre-compiled binaries for Linux, macOS, and Windows are available on the [Releases page](https://github.com/youruser/shadowbox/releases).
+
+### From crates.io
+```bash
+cargo install shadowbox
+```
+
 ### From Source
 ```bash
 cargo build --release
