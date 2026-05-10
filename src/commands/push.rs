@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::git::{get_repo_id, get_repo_root};
-use crate::utils::{copy_recursive, get_store_dir, get_vault_project_path};
+use crate::utils::{get_store_dir, get_vault_project_path, sync_recursive};
 use std::fs;
 use std::process::Command;
 
@@ -29,7 +29,7 @@ pub fn run() -> std::io::Result<()> {
 
         if fs::symlink_metadata(&local_path).is_ok() {
             println!("  [SYNC] {}", name.to_string_lossy());
-            copy_recursive(&local_path, &vault_path, false)?;
+            sync_recursive(&local_path, &vault_path, false)?;
         } else {
             println!("  [DELETE] {} (not found locally)", name.to_string_lossy());
             if let Ok(meta) = fs::symlink_metadata(&vault_path) {

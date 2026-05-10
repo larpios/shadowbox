@@ -35,11 +35,11 @@ enum Commands {
         #[arg(long, short)]
         follow_links: bool,
     },
-    /// Untrack a file or directory by removing it from the vault
+    /// Untrack file(s) or director(y/ies) by removing from the vault
     #[command(alias = "ut", alias = "u")]
     Untrack {
-        /// Path to the file to untrack
-        path: String,
+        /// Path(s) to untrack (supports globs)
+        paths: Vec<String>,
     },
     /// List all tracked files
     #[command(alias = "st")]
@@ -114,7 +114,7 @@ fn main() {
             patterns,
             follow_links,
         }) => commands::track::run(patterns, *follow_links),
-        Some(Commands::Untrack { path }) => commands::untrack::run(path),
+        Some(Commands::Untrack { paths }) => commands::untrack::run(paths),
         Some(Commands::Status) => commands::status::run(),
         Some(Commands::Hooks { command }) => match command {
             HookCommands::Install => commands::hooks::install(),
