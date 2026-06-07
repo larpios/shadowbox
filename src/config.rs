@@ -42,27 +42,20 @@ pub fn config_dir() -> std::io::Result<PathBuf> {
     if let Ok(val) = std::env::var("XDG_CONFIG_HOME") {
         return Ok(PathBuf::from(val).join("shadowbox"));
     }
-    let home = std::env::var("HOME").map_err(|_| {
-        std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "HOME environment variable not set",
-        )
-    })?;
-    Ok(PathBuf::from(home).join(".config").join("shadowbox"))
+    let home = std::env::home_dir().ok_or(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "Home directory not found",
+    ))?;
+    Ok(home.join(".config").join("shadowbox"))
 }
 
 pub fn data_dir() -> std::io::Result<PathBuf> {
     if let Ok(val) = std::env::var("XDG_DATA_HOME") {
         return Ok(PathBuf::from(val).join("shadowbox"));
     }
-    let home = std::env::var("HOME").map_err(|_| {
-        std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "HOME environment variable not set",
-        )
-    })?;
-    Ok(PathBuf::from(home)
-        .join(".local")
-        .join("share")
-        .join("shadowbox"))
+    let home = std::env::home_dir().ok_or(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "Home directory not found",
+    ))?;
+    Ok(home.join(".local").join("share").join("shadowbox"))
 }
